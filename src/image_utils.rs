@@ -1,9 +1,24 @@
 use base64::encode;
 use opencv::{
-    calib3d::{estimate_affine_2d, RANSAC},
-    core::{count_non_zero, no_array, norm2, Point2f, Vector, NORM_L2},
+    calib3d::{estimate_affine_2d, estimate_affine_partial_2d, RANSAC},
+    core::{no_array, norm2, Point2f, Size, Vector, NORM_L2},
+    imgproc::{resize, INTER_AREA},
     prelude::*,
 };
+
+pub fn to_small_image(mat: &Mat) -> Mat {
+    let mut scaled_mat = Mat::default().unwrap();
+    let size = mat.size().unwrap();
+    let max_area = 300 * 400;
+    let factor = ((max_area as f32) / (size.area() as f32)).sqrt();
+    let new_size = Size::new(
+        ((size.width as f32) * factor) as i32,
+        ((size.height as f32) * factor) as i32,
+    );
+    resize(&mat, &mut scaled_mat, new_size, 0.0, 0.0, INTER_AREA).unwrap();
+
+    scaled_mat
+}
 
 pub fn get_similarity(img1: &Mat, img2: &Mat) -> f32 {
     let error_l2 = norm2(img1, img2, NORM_L2, &no_array().unwrap()).unwrap();
@@ -20,7 +35,7 @@ fn mat_to_base64_string(mat: Mat) -> String {
 }
 
 pub struct Transformation2D {
-    mat: Mat,
+    pub mat: Mat,
 }
 
 impl Transformation2D {
@@ -30,22 +45,18 @@ impl Transformation2D {
 }
 
 pub struct EstimationResult {
-    transformation: Transformation2D,
+    pub transformation: Transformation2D,
     inliers: Vector<u8>,
 }
 
 impl EstimationResult {
-    pub fn rating(&self) -> f64 {
-        (count_non_zero(&self.inliers).unwrap() as f64) / (self.inliers.len() as f64)
-    }
-
     pub fn inlier_flags(&self) -> Vec<bool> {
         self.inliers.iter().map(|v| v == 1).collect()
     }
 }
 
 impl Transformation2D {
-    pub fn estimate<I>(points: I) -> EstimationResult
+    pub fn estimate_affine<I>(points: I) -> EstimationResult
     where
         I: Iterator<Item = (Point2f, Point2f)>,
     {
@@ -53,8 +64,8 @@ impl Transformation2D {
 
         let mut inliers = Vector::<u8>::default();
 
-        let mat =
-            estimate_affine_2d(&from, &to, &mut inliers, RANSAC, 3.0, 2000, 0.99, 10).unwrap();
+        let mat = estimate_affine_partial_2d(&from, &to, &mut inliers, RANSAC, 3.0, 2000, 0.99, 10)
+            .unwrap();
         assert!(from.len() == inliers.len());
 
         EstimationResult {

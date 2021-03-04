@@ -5,32 +5,19 @@ mod utils;
 mod video_capture;
 
 use feature_extractor::FeatureExtractor;
-use flann::FlannMatcher;
-use image_utils::Transformation2D;
+use flann::{FlannDictionary, FlannMatcher};
+use image_utils::{get_similarity, to_small_image, Transformation2D};
 
-use opencv::imgcodecs::*;
 use opencv::{
-    calib3d::{estimate_affine_2d, RANSAC},
-    core::{count_non_zero, no_array, DMatch, KeyPoint, Point2f, Ptr, Scalar, Size, Vector},
-    features2d::{draw_keypoints, draw_matches_knn, DrawMatchesFlags},
-    flann::{IndexParams, LshIndexParams, SearchParams, FLANN_INDEX_LSH},
+    core::{add_weighted, DMatch, KeyPoint, Scalar, Vector},
+    features2d::{draw_matches_knn, DrawMatchesFlags},
     highgui::{imshow, wait_key},
-    imgproc::{resize, INTER_AREA},
+    imgproc::{cvt_color, COLOR_BGRA2BGR, WARP_INVERSE_MAP},
     prelude::*,
-    types::VectorOfMat,
-    videoio::{VideoCapture, CAP_DSHOW, CAP_PROP_FPS, CAP_PROP_FRAME_COUNT, CAP_PROP_POS_FRAMES},
 };
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
-use std::{
-    borrow::{Borrow, BorrowMut},
-    cell::{Cell, RefCell},
-    collections::HashMap,
-    iter,
-    path::{Path, PathBuf},
-    process::Command,
-    rc::Rc,
-    time::Instant,
-};
+use opencv::{imgcodecs::*, imgproc::warp_affine};
+use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
+use std::{cell::RefCell, collections::HashMap, hash::Hasher, iter, path::PathBuf, time::Instant};
 use utils::pdf_to_images;
 use video_capture::{FilterIter, VideoCaptureIter};
 
@@ -49,6 +36,21 @@ struct Slide {
     pub descriptors: Mat,
     pub page: u32,
     pub img: Mat,
+    pub small_img: Mat,
+}
+
+impl PartialEq for &Slide {
+    fn eq(&self, other: &Self) -> bool {
+        self.page == other.page
+    }
+}
+
+impl Eq for &Slide {}
+
+impl std::hash::Hash for &Slide {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        state.write_u32(self.page);
+    }
 }
 
 fn test() -> opencv::Result<()> {
@@ -58,22 +60,29 @@ fn test() -> opencv::Result<()> {
 
     let slides_with_features: Vec<_> = slides
         .par_iter()
-        .map(|i| {
+        .enumerate()
+        .map(|(idx, i)| {
             let slide = imread(&i.to_string_lossy(), 0).unwrap();
+            let mut slide2 = Mat::default().unwrap();
+            cvt_color(&slide, &mut slide2, COLOR_BGRA2BGR, 0).unwrap();
+
             let result =
-                FEATURE_EXTRACTOR.with(|e| e.borrow_mut().find_keypoints_and_descriptors(&slide));
+                FEATURE_EXTRACTOR.with(|e| e.borrow_mut().find_keypoints_and_descriptors(&slide2));
             Slide {
                 descriptors: result.descriptors,
                 keypoints: result.keypoints,
-                page: 0,
-                img: slide,
+                page: idx as u32,
+                small_img: to_small_image(&slide2),
+                img: slide2,
             }
         })
         .collect();
 
-    let mut flann = FlannMatcher::default();
-    flann.add_descriptors(slides_with_features.iter().map(|f| f.descriptors.clone()));
-    flann.train();
+    let mut flann = FlannDictionary::new(
+        slides_with_features
+            .iter()
+            .map(|f| (f, f.descriptors.clone())),
+    );
 
     let vid = VideoCaptureIter::open(
         &"S:\\uni\\Entscheidungsverfahren\\Vorlesung vom 10.11.2020.mp4".into(),
@@ -92,16 +101,15 @@ fn test() -> opencv::Result<()> {
         println!("Find matches...");
         let matches = flann.knn_match(&frame_info.descriptors, 30);
 
-        let mut best_matches_by_slide_idx = HashMap::<i32, Vec<DMatch>>::new();
-
-        for matched_descriptors in matches {
-            let best = &matched_descriptors.get(0).unwrap();
-
-            for dmatch in matched_descriptors {
+        let mut best_matches_by_slide_idx = HashMap::<&Slide, Vec<_>>::new();
+        for matched_descriptors in matches.into_iter() {
+            let best = matched_descriptors[0].clone();
+            for dmatch in matched_descriptors.into_iter() {
+                // Add a match for all descriptors the query descriptor has a good match with.
                 assert!(best.query_idx == dmatch.query_idx);
                 if dmatch.distance < best.distance * 1.05 {
                     best_matches_by_slide_idx
-                        .entry(dmatch.img_idx)
+                        .entry(dmatch.source)
                         .or_default()
                         .push(dmatch);
                 }
@@ -109,37 +117,61 @@ fn test() -> opencv::Result<()> {
         }
 
         let mut best_matches = best_matches_by_slide_idx.into_iter().collect::<Vec<_>>();
+        // Process slides with many matches first
         best_matches.sort_by_key(|(_, m)| -(m.len() as isize));
 
         let mut rated_best_matches: Vec<_> = best_matches
             .into_iter()
-            .take(40)
-            .map(|(slide_idx, matches)| {
-                let slide_info = &slides_with_features[slide_idx as usize];
-
-                //get_rating_of_affine_transform
-
-                let result = Transformation2D::estimate(matches.iter().map(|m| {
+            .take(40) // Only consider the best 40 slides
+            .map(|(slide_info, matches)| {
+                let result = Transformation2D::estimate_affine(matches.iter().map(|m| {
                     (
                         slide_info.keypoints.get(m.train_idx as usize).unwrap().pt,
                         frame_info.keypoints.get(m.query_idx as usize).unwrap().pt,
                     )
                 }));
-
-                let inlier_matches: Vec<DMatch> = matches
+                let inlier_matches: Vec<_> = matches
                     .into_iter()
                     .zip(result.inlier_flags())
-                    .filter_map(|(m, is_inlier)| if is_inlier { Some(m) } else { None })
+                    .filter(|&(_, is_inlier)| is_inlier)
+                    .map(|(m, _)| m)
                     .collect();
 
-                //let affine_rating = result.rating();
-                //println!("Rating of slide {}: {}", slide_idx, affine_rating);
-
                 let rating = inlier_matches.len() as f64;
-
-                (slide_idx, inlier_matches, rating)
+                (slide_info, inlier_matches, rating, result.transformation)
             })
             .collect();
+
+        rated_best_matches.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap());
+        rated_best_matches.truncate(10);
+
+        let mut rated_best_matches = rated_best_matches
+            .into_iter()
+            .map(|(slide_info, matches, rating, transformation)| {
+                let mut frame_proj = Mat::default().unwrap();
+                warp_affine(
+                    &frame,
+                    &mut frame_proj,
+                    &transformation.mat,
+                    slide_info.img.size().unwrap(),
+                    WARP_INVERSE_MAP,
+                    0,
+                    Scalar::new(0.0, 0.0, 0.0, 0.0),
+                )
+                .unwrap();
+
+                let similarity =
+                    get_similarity(&to_small_image(&frame_proj), &slide_info.small_img);
+                //println!("similarity: {}", similarity);
+
+                /*
+                imshow(&"test", &frame_proj2).unwrap();
+                imshow(&"test2", &slide_info.small_img).unwrap();
+                wait_key(0).unwrap();
+                */
+                (slide_info, matches, similarity, transformation)
+            })
+            .collect::<Vec<_>>();
 
         rated_best_matches.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap());
 
@@ -148,33 +180,7 @@ fn test() -> opencv::Result<()> {
             continue;
         }
 
-        let (slide_idx, matches, _rating) = first.unwrap();
-        let slide_info = &slides_with_features[slide_idx as usize];
-
-        let v = matches
-            .iter()
-            .map(|m| iter::once(m.clone()).collect::<Vector<_>>())
-            .collect::<Vector<_>>();
-
-        let mut out_img = Mat::default().unwrap();
-        draw_matches_knn(
-            &frame,
-            &frame_info.keypoints,
-            &slide_info.img,
-            &slide_info.keypoints,
-            &v,
-            &mut out_img,
-            Scalar::new(255.0, 0.0, 0.0, 0.0),
-            Scalar::new(0.0, 255.0, 0.0, 0.0),
-            &Vector::default(),
-            DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS,
-        )
-        .unwrap();
-        imshow(&"test", &out_img)?;
-        wait_key(0)?;
-
-        println!("next");
-        //process_img(&frame);
+        let (slide_info, matches, _rating, transformation) = first.unwrap();
     }
 
     return Ok(());

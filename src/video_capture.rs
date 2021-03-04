@@ -1,30 +1,13 @@
-
+use std::{path::PathBuf, rc::Rc};
 
 use opencv::{
-    calib3d::{estimate_affine_2d, RANSAC},
-    core::{count_non_zero, no_array, DMatch, KeyPoint, Point2f, Ptr, Scalar, Size, Vector},
-    features2d::{draw_keypoints, draw_matches_knn, DrawMatchesFlags},
-    flann::{IndexParams, LshIndexParams, SearchParams, FLANN_INDEX_LSH},
-    highgui::{imshow, wait_key},
+    core::Size,
     imgproc::{resize, INTER_AREA},
     prelude::*,
-    types::VectorOfMat,
-    videoio::{VideoCapture, CAP_DSHOW, CAP_PROP_FPS, CAP_PROP_FRAME_COUNT, CAP_PROP_POS_FRAMES},
+    videoio::{VideoCapture, CAP_PROP_FPS, CAP_PROP_FRAME_COUNT, CAP_PROP_POS_FRAMES},
 };
 
-
-use std::{
-    borrow::{Borrow, BorrowMut},
-    cell::{Cell, RefCell},
-    collections::HashMap,
-    iter,
-    path::{Path, PathBuf},
-    process::Command,
-    rc::Rc,
-    time::Instant,
-};
-
-use crate::image_utils::get_similarity;
+use crate::image_utils::{get_similarity, to_small_image};
 
 pub struct VideoCaptureIter {
     video: VideoCapture,
@@ -103,16 +86,7 @@ where
     fn next(&mut self) -> Option<(f64, Mat, Rc<Mat>)> {
         loop {
             if let Some((frame_id, frame)) = self.iter.next() {
-                let mut scaled_frame = Mat::default().unwrap();
-                let size = frame.size().unwrap();
-                let max_area = 300 * 400;
-                let factor = ((max_area as f32) / (size.area() as f32)).sqrt();
-                let new_size = Size::new(
-                    ((size.width as f32) * factor) as i32,
-                    ((size.height as f32) * factor) as i32,
-                );
-                resize(&frame, &mut scaled_frame, new_size, 0.0, 0.0, INTER_AREA).unwrap();
-
+                let scaled_frame = to_small_image(&frame);
                 let similarity = if let Some(last_frame) = &self.last_frame {
                     get_similarity(last_frame, &scaled_frame)
                 } else {

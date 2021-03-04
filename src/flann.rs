@@ -1,18 +1,12 @@
+use std::{collections::HashMap, ops::RangeFrom};
 
+use opencv::features2d::FlannBasedMatcher;
 use opencv::{
-    calib3d::{estimate_affine_2d, RANSAC},
-    core::{count_non_zero, no_array, DMatch, KeyPoint, Point2f, Ptr, Scalar, Size, Vector},
-    features2d::{draw_keypoints, draw_matches_knn, DrawMatchesFlags},
-    flann::{IndexParams, LshIndexParams, SearchParams, FLANN_INDEX_LSH},
-    highgui::{imshow, wait_key},
-    imgproc::{resize, INTER_AREA},
+    core::{no_array, DMatch, Ptr, Vector},
+    flann::{IndexParams, SearchParams, FLANN_INDEX_LSH},
     prelude::*,
     types::VectorOfMat,
-    videoio::{VideoCapture, CAP_DSHOW, CAP_PROP_FPS, CAP_PROP_FRAME_COUNT, CAP_PROP_POS_FRAMES},
 };
-use opencv::{features2d::FlannBasedMatcher};
-use rayon::iter::{ParallelIterator};
-
 
 pub struct FlannMatcher {
     matcher: FlannBasedMatcher,
@@ -52,5 +46,53 @@ impl FlannMatcher {
 
     pub fn train(self: &mut Self) {
         opencv::prelude::FlannBasedMatcherTrait::train(&mut self.matcher).unwrap();
+    }
+}
+
+pub struct FlannDictionary<TKey> {
+    keys: Vec<TKey>,
+    matcher: FlannMatcher,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct KeyedDMatch<TKey> {
+    /// query descriptor index
+    pub query_idx: i32,
+    /// train descriptor index
+    pub train_idx: i32,
+    pub source: TKey,
+    pub distance: f32,
+}
+
+impl<TKey: Copy> FlannDictionary<TKey> {
+    pub fn new<'a, I>(descriptors: I) -> Self
+    where
+        I: Iterator<Item = (TKey, Mat)>,
+    {
+        let (keys, descriptors): (Vec<_>, Vec<_>) = descriptors.unzip();
+
+        let mut matcher = FlannMatcher::default();
+        matcher.add_descriptors(descriptors.into_iter());
+        matcher.train();
+
+        FlannDictionary { keys, matcher }
+    }
+
+    pub fn knn_match(self: &mut Self, descriptors: &Mat, k: i32) -> Vec<Vec<KeyedDMatch<TKey>>> {
+        let result = self.matcher.knn_match(descriptors, k);
+
+        result
+            .into_iter()
+            .map(|v| {
+                v.into_iter()
+                    .map(|m| KeyedDMatch {
+                        distance: m.distance,
+                        query_idx: m.query_idx,
+                        train_idx: m.train_idx,
+                        source: self.keys[m.img_idx as usize],
+                    })
+                    .collect()
+            })
+            .collect()
     }
 }
