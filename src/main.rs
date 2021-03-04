@@ -4,11 +4,11 @@ mod image_utils;
 mod utils;
 mod video_capture;
 
-use base64::encode;
 use feature_extractor::FeatureExtractor;
 use flann::FlannMatcher;
-use image_utils::{get_similarity, Transformation2D};
-use indicatif::ParallelProgressIterator;
+use image_utils::Transformation2D;
+
+use opencv::imgcodecs::*;
 use opencv::{
     calib3d::{estimate_affine_2d, RANSAC},
     core::{count_non_zero, no_array, DMatch, KeyPoint, Point2f, Ptr, Scalar, Size, Vector},
@@ -20,7 +20,6 @@ use opencv::{
     types::VectorOfMat,
     videoio::{VideoCapture, CAP_DSHOW, CAP_PROP_FPS, CAP_PROP_FRAME_COUNT, CAP_PROP_POS_FRAMES},
 };
-use opencv::{features2d::FlannBasedMatcher, imgcodecs::*};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::{
     borrow::{Borrow, BorrowMut},
@@ -32,7 +31,7 @@ use std::{
     rc::Rc,
     time::Instant,
 };
-use utils::{get_temp_path_key, pdf_to_images};
+use utils::pdf_to_images;
 use video_capture::{FilterIter, VideoCaptureIter};
 
 fn main() {
@@ -83,7 +82,7 @@ fn test() -> opencv::Result<()> {
     let total_frames = vid.total_frames();
     let video_frames = FilterIter::new(vid);
 
-    for (frame_idx, frame, scaled_frame) in video_frames {
+    for (frame_idx, frame, _scaled_frame) in video_frames {
         println!(
             "Processing next frame ({:?}% done)",
             (frame_idx / total_frames) * 100.0
@@ -149,7 +148,7 @@ fn test() -> opencv::Result<()> {
             continue;
         }
 
-        let (slide_idx, matches, rating) = first.unwrap();
+        let (slide_idx, matches, _rating) = first.unwrap();
         let slide_info = &slides_with_features[slide_idx as usize];
 
         let v = matches

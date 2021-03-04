@@ -1,5 +1,5 @@
-use base64::encode;
-use indicatif::ParallelProgressIterator;
+
+
 use opencv::{
     calib3d::{estimate_affine_2d, RANSAC},
     core::{count_non_zero, no_array, DMatch, KeyPoint, Point2f, Ptr, Scalar, Size, Vector},
@@ -11,8 +11,8 @@ use opencv::{
     types::VectorOfMat,
     videoio::{VideoCapture, CAP_DSHOW, CAP_PROP_FPS, CAP_PROP_FRAME_COUNT, CAP_PROP_POS_FRAMES},
 };
-use opencv::{features2d::FlannBasedMatcher, imgcodecs::*};
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+
+
 use std::{
     borrow::{Borrow, BorrowMut},
     cell::{Cell, RefCell},

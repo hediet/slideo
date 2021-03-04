@@ -1,7 +1,7 @@
 use base64::encode;
 use opencv::{
     calib3d::{estimate_affine_2d, RANSAC},
-    core::{count_non_zero, no_array, norm2, Point2f, Vector, VectorRefIterator, NORM_L2},
+    core::{count_non_zero, no_array, norm2, Point2f, Vector, NORM_L2},
     prelude::*,
 };
 
