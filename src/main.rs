@@ -5,32 +5,29 @@ mod utils;
 mod video_capture;
 
 use feature_extractor::FeatureExtractor;
-use flann::{FlannDictionary, FlannMatcher};
+use flann::FlannDictionary;
 use image_utils::{get_similarity, to_small_image, Transformation2D};
 
 use opencv::{
-    core::{add_weighted, DMatch, KeyPoint, Scalar, Vector},
-    features2d::{draw_matches_knn, DrawMatchesFlags},
+    core::{hconcat, KeyPoint, Scalar, Vector},
     highgui::{imshow, wait_key},
     imgproc::{cvt_color, COLOR_BGRA2BGR, WARP_INVERSE_MAP},
     prelude::*,
 };
 use opencv::{imgcodecs::*, imgproc::warp_affine};
-use rayon::iter::{
-    IndexedParallelIterator, IntoParallelRefIterator, ParallelBridge, ParallelIterator,
-};
+use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
+use serde::{Deserialize, Serialize};
 use std::{
-    borrow::{Borrow, BorrowMut},
+    borrow::BorrowMut,
     cell::RefCell,
     collections::HashMap,
+    fmt::Debug,
     hash::Hasher,
-    iter,
     path::PathBuf,
-    rc::Rc,
-    sync::Arc,
-    time::Instant,
+    sync::{Arc, Mutex},
+    time::{Duration, Instant},
 };
-use utils::pdf_to_images;
+use utils::{get_temp_path_key, pdf_to_images};
 use video_capture::{FilterIter, VideoCaptureIter};
 
 fn main() {
@@ -68,7 +65,20 @@ impl std::hash::Hash for &Slide {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct Output {
+    mappings: Vec<Mapping>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct Mapping {
+    offset_ms: usize,
+    slide_idx: usize,
+}
+
 fn test() -> opencv::Result<()> {
+    let results = Arc::new(Mutex::new(Vec::<Mapping>::new()));
+    let out_path = get_temp_path_key(&format!("{:?}", std::time::SystemTime::now()));
     rayon::scope(|s| {
         let slides = pdf_to_images(&PathBuf::from(
             &"S:\\dev\\2021\\slide-synchronizer\\data\\slides2.pdf",
@@ -99,23 +109,26 @@ fn test() -> opencv::Result<()> {
 
         let vid = VideoCaptureIter::open(
             &"S:\\uni\\Entscheidungsverfahren\\Vorlesung vom 10.11.2020.mp4".into(),
-            5.0,
+            Duration::from_secs(5),
         );
-        let total_frames = vid.total_frames();
+
+        let total_time = vid.total_time();
         let video_frames = FilterIter::new(vid);
 
         thread_local!(static SHARED_FLANN: RefCell<Option<FlannDictionary::<&'static Slide>>> = RefCell::new(None));
 
-        for (frame_idx, frame, _scaled_frame) in video_frames {
+        for (frame_timestamp, frame, _scaled_frame) in video_frames {
+            let results = results.clone();
+            let out_path = out_path.clone();
             s.spawn(move |s| {
                 SHARED_FLANN.with(|flann: &RefCell<Option<FlannDictionary<&'static Slide>>>| {
                     println!(
-                        "Processing next frame ({:?}% done)",
-                        (frame_idx / total_frames) * 100.0
+                        "Processing next frame ({}, {:.1}%)",
+                        fmt_duration(frame_timestamp),
+                        (frame_timestamp.as_secs_f64() / total_time.as_secs_f64()) * 100.0
                     );
 
                     if flann.borrow().is_none() {
-                        println!("Initializing flann");
                         flann.replace(Some(FlannDictionary::new(
                             slides_with_features
                                 .iter()
@@ -128,9 +141,6 @@ fn test() -> opencv::Result<()> {
 
                     let frame_info = FEATURE_EXTRACTOR
                         .with(|e| e.borrow_mut().find_keypoints_and_descriptors(&frame));
-
-                    println!("Find matches... {}", (frame_idx / total_frames) * 100.0);
-
                     let matches = flann.knn_match(&frame_info.descriptors, 30);
 
                     let mut best_matches_by_slide_idx = HashMap::<&Slide, Vec<_>>::new();
@@ -178,6 +188,9 @@ fn test() -> opencv::Result<()> {
 
                     rated_best_matches.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap());
                     rated_best_matches.truncate(10);
+                    let best_rating = rated_best_matches.first().map_or(0.0, |v| v.2);
+                    // Keep all matches that have a competitive rating.
+                    rated_best_matches.retain(|v| v.2 > 50.0 && v.2 / best_rating > 0.2);
 
                     let mut rated_best_matches = rated_best_matches
                         .into_iter()
@@ -194,30 +207,79 @@ fn test() -> opencv::Result<()> {
                             )
                             .unwrap();
 
-                            let similarity =
-                                get_similarity(&to_small_image(&frame_proj), &slide_info.small_img);
-                            //println!("similarity: {}", similarity);
+                            let frame_proj2 = to_small_image(&frame_proj);
+                            let similarity = get_similarity(&frame_proj2, &slide_info.small_img);
+                            let mut images = Vector::<Mat>::default();
+                            images.push(frame_proj2);
+                            images.push(slide_info.small_img.clone());
+                            let mut out = Mat::default().unwrap();
+                            hconcat(&images, &mut out).unwrap();
 
                             /*
-                            imshow(&"test", &frame_proj2).unwrap();
+                            println!("similarity: {}, rating: {}", similarity, rating);
+                            imshow(&"test", frame_proj2).unwrap();
                             imshow(&"test2", &slide_info.small_img).unwrap();
                             wait_key(0).unwrap();
                             */
-                            (slide_info, matches, similarity, transformation)
+
+                            (slide_info, matches, similarity, transformation, out)
                         })
                         .collect::<Vec<_>>();
 
+                    // At least a similarity of 0.5 is required
+                    rated_best_matches.retain(|v| v.2 > 0.5);
                     rated_best_matches.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap());
 
                     let first = rated_best_matches.into_iter().next();
 
-                    if let Some((slide_info, matches, _rating, transformation)) = first {
-                        println!("Found slide {}", slide_info.page);
+                    if let Some((slide_info, _matches, _rating, _transformation, out)) = first {
+                        let mut list = results.lock().unwrap();
+                        std::fs::create_dir_all(&out_path).unwrap();
+                        imwrite(
+                            &out_path
+                                .join(&format!("{}.png", list.borrow_mut().len()))
+                                .to_string_lossy(),
+                            &out,
+                            &Vector::new(),
+                        )
+                        .unwrap();
+                        list.borrow_mut().push(Mapping {
+                            offset_ms: frame_timestamp.as_millis() as usize,
+                            slide_idx: slide_info.page as usize,
+                        });
                     }
                 });
             });
         }
     });
 
+    let mut mappings = results.lock().unwrap().clone();
+    mappings.sort_by_key(|m| m.offset_ms);
+    let mut cleaned_mappings = Vec::new();
+    let mut last_mapping: Option<Mapping> = None;
+    for mapping in mappings {
+        if let Some(last_mapping) = &last_mapping {
+            if last_mapping.slide_idx == mapping.slide_idx {
+                continue;
+            }
+        }
+        last_mapping = Some(mapping.clone());
+        cleaned_mappings.push(mapping);
+    }
+
+    let output = Output {
+        mappings: cleaned_mappings,
+    };
+
+    let serialized = serde_json::to_string(&output).unwrap();
+    println!("serialized = {}", serialized);
+
     return Ok(());
+}
+
+fn fmt_duration(d: Duration) -> String {
+    let seconds = d.as_secs() % 60;
+    let minutes = (d.as_secs() / 60) % 60;
+    let hours = (d.as_secs() / 60) / 60;
+    return format!("{}:{}:{}", hours, minutes, seconds);
 }
