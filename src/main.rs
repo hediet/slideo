@@ -3,7 +3,7 @@ mod db;
 mod video_exts;
 
 use anyhow::{Context, Result};
-use db::{Db, DbFactory, HashedFile};
+use db::{Db, HashedFile};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 /*use migrations::CreateUsers;
 use rusqlite::Connection;
@@ -106,15 +106,14 @@ async fn main() -> Result<()> {
         })
         .collect::<Result<Vec<CheckedPath>>>()?;
 
-    let mut db = DbFactory::connect().await?;
+    let mut db = Db::connect().await?;
 
-    db.db()
-        .update_hashes(
-            paths
-                .iter()
-                .map(|p| HashedFile::new(p.path.clone(), p.hash.clone().unwrap())),
-        )
-        .await?;
+    db.update_hashes(
+        paths
+            .iter()
+            .map(|p| HashedFile::new(p.path.clone(), p.hash.clone().unwrap())),
+    )
+    .await?;
 
     let videos = paths
         .iter()

@@ -1,66 +1,19 @@
 use std::{marker::PhantomData, path::PathBuf};
 
-use sqlx::{sqlite::SqliteConnectOptions, Error};
+use sqlx::{sqlite::SqliteConnectOptions, Database, Error};
 use sqlx::{Connection, Sqlite, Transaction};
 use sqlx::{Executor, SqliteConnection};
 
-trait IntoExecutor<'c, E: Executor<'c, Database = Sqlite>> {
-    fn to_executor(&mut self) -> E;
+enum DbImpl<'a> {
+    Conn(SqliteConnection),
+    Trans(Transaction<'a, Sqlite>),
 }
 
-pub struct DbFactory {
-    conn: SqliteConnection,
-}
+pub enum TransactionMarker {}
 
-impl DbFactory {
-    pub async fn connect() -> Result<DbFactory, Error> {
-        let mut conn = SqliteConnection::connect_with(
-            &SqliteConnectOptions::new()
-                .filename(&"test.db")
-                .create_if_missing(true),
-        )
-        .await?;
-
-        sqlx::migrate!("./migrations").run(&mut conn).await?;
-
-        Ok(DbFactory { conn })
-    }
-
-    pub fn db<'c>(self: &'c mut Self) -> Db<'c, &'c mut SqliteConnection> {
-        Db {
-            executor: &&mut self.conn,
-            _marker: PhantomData::default(),
-        }
-    }
-
-    pub async fn begin_transaction<'c>(self: &'c mut Self) -> Result<DbTransaction<'c>, Error> {
-        Ok(DbTransaction {
-            tx: self.conn.begin().await?,
-        })
-    }
-}
-
-struct DbTransaction<'c> {
-    tx: Transaction<'c, Sqlite>,
-}
-
-impl<'c> DbTransaction<'c> {
-    pub fn db(&'c mut self) -> Db<'c, &'c mut Transaction<'c, Sqlite>> {
-        let tx: &'c mut Transaction<'c, Sqlite> = &mut self.tx;
-
-        Db {
-            executor: &tx,
-            _marker: PhantomData::default(),
-        }
-    }
-}
-
-pub struct Db<'c, E>
-where
-    E: Executor<'c>,
-{
-    executor: E,
-    _marker: PhantomData<&'c ()>,
+pub struct Db<'a, T> {
+    db: DbImpl<'a>,
+    _marker: PhantomData<T>,
 }
 
 #[derive(Clone, Debug)]
@@ -80,10 +33,58 @@ pub struct MappingInfo {
     pub finished: bool,
 }
 
-impl<'c, E> Db<'c, E>
-where
-    E: Executor<'c, Database = Sqlite>,
-{
+impl<'a> Db<'a, TransactionMarker> {
+    pub async fn commit(self) -> Result<(), Error> {
+        match self.db {
+            DbImpl::Conn(conn) => panic!("Should not happen"),
+            DbImpl::Trans(conn) => conn.commit().await?,
+        }
+        Ok(())
+    }
+
+    pub async fn rollback(self) -> Result<(), Error> {
+        match self.db {
+            DbImpl::Conn(conn) => panic!("Should not happen"),
+            DbImpl::Trans(conn) => conn.rollback().await?,
+        }
+        Ok(())
+    }
+}
+
+impl Db<'static, ()> {
+    pub async fn connect() -> Result<Db<'static, ()>, Error> {
+        let mut conn = SqliteConnection::connect_with(
+            &SqliteConnectOptions::new()
+                .filename(&"test.db")
+                .create_if_missing(true),
+        )
+        .await?;
+
+        sqlx::migrate!("./migrations").run(&mut conn).await?;
+
+        Ok(Db {
+            db: DbImpl::Conn(conn),
+            _marker: PhantomData::default(),
+        })
+    }
+}
+
+impl<'a, T> Db<'a, T> {
+    pub async fn begin_trans<'c>(&'c mut self) -> Result<Db<'c, TransactionMarker>, Error> {
+        let trans = self.get_conn_mut().begin().await?;
+        Ok(Db {
+            db: DbImpl::Trans(trans),
+            _marker: PhantomData::default(),
+        })
+    }
+
+    fn get_conn_mut(&mut self) -> &mut SqliteConnection {
+        match &mut self.db {
+            DbImpl::Conn(conn) => conn,
+            DbImpl::Trans(conn) => conn,
+        }
+    }
+
     pub async fn update_hashes(
         &mut self,
         files: impl Iterator<Item = HashedFile>,
@@ -100,7 +101,7 @@ where
                 path,
                 hash
             )
-            .execute(self.executor)
+            .execute(self.get_conn_mut())
             .await?;
 
             sqlx::query!(
@@ -111,14 +112,14 @@ where
                 path,
                 hash
             )
-            .execute(self.executor)
+            .execute(self.get_conn_mut())
             .await?;
         }
         Ok(())
     }
 
-    pub async fn find_mapping_info<'a>(
-        &'a mut self,
+    pub async fn find_mapping_info(
+        &mut self,
         video: &HashedFile,
     ) -> Result<Option<MappingInfo>, Error> {
         let hash = &video.hash;
@@ -131,7 +132,7 @@ where
             ",
             hash
         )
-        .fetch_all(self.executor)
+        .fetch_all(self.get_conn_mut())
         .await?;
 
         if results.len() == 0 {
