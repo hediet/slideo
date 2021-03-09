@@ -1,3 +1,5 @@
 {
-    "editor.formatOnSave": true
+    "editor.formatOnSave": true,
+    "sqltools.connections": [],
+    "sqltools.useNodeRuntime": true
 }

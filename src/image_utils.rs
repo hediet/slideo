@@ -63,7 +63,6 @@ impl Transformation2D {
         let (from, to): (Vector<Point2f>, Vector<Point2f>) = points.unzip();
 
         let mut inliers = Vector::<u8>::default();
-
         let mat = estimate_affine_partial_2d(&from, &to, &mut inliers, RANSAC, 3.0, 2000, 0.99, 10)
             .unwrap();
         assert!(from.len() == inliers.len());

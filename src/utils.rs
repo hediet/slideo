@@ -19,12 +19,12 @@ fn hash(value: &str) -> String {
     return hash_str;
 }
 
-pub fn get_temp_path_key(key: &str) -> PathBuf {
-    return get_temp_path().join(&hash(key)[0..20]);
+pub fn get_temp_path_key(category: &str, key: &str) -> PathBuf {
+    return get_temp_path().join(&format!("{}-{}", category, &hash(key)[0..20]));
 }
 
 pub fn pdf_to_images(pdf: &Path) -> Vec<PathBuf> {
-    let path = get_temp_path_key(&format!("slides-v1-{}", &pdf.to_str().unwrap()));
+    let path = get_temp_path_key("slides-v1", &pdf.to_str().unwrap());
 
     if !path.exists() {
         std::fs::create_dir_all(&path).unwrap();
