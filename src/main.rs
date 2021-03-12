@@ -31,12 +31,11 @@ struct Opt {
     #[structopt(long)]
     invalidate_video_cache: bool,
     /*
-    #[structopt(long)]
-    ignore_video_ext: bool,
-
+       #[structopt(long)]
+       ignore_video_ext: bool,
+    */
     #[structopt(long)]
     non_interactive: bool,
-    */
 }
 
 #[derive(Clone, Debug)]
@@ -123,7 +122,11 @@ async fn main() -> Result<()> {
                         existing.pdf_hashes.iter().map(|h| &h as &str).collect();
 
                     if !pdf_hashes.is_subset(&cached_pdf_hashes) {
-                        if Confirm::new()
+                        if opt.non_interactive {
+                            println!("Recomputing Video '{}', as it has been analyzed with different pdfs.", video.path.to_string_lossy());
+                            videos_to_process.push(video);
+                        }
+                        else if Confirm::new()
                             .with_prompt(format!(
                                 "Video '{}' has been cached, but different pdfs are provided now. Recompute?",
                                 video.path.to_string_lossy()
@@ -175,7 +178,10 @@ async fn main() -> Result<()> {
     }
 
     let first = pdfs.iter().next();
-    start_server(first.map(|h| h.hash.clone()))?;
+
+    if !opt.non_interactive {
+        start_server(first.map(|h| h.hash.clone()))?;
+    }
 
     Ok(())
 }

@@ -30,6 +30,13 @@
     "@hediet/semantic-json" "^0.4.1"
     "@hediet/std" "^0.6.0"
 
+"@hediet/pdfjs-viewer@^0.1.0":
+  version "0.1.0"
+  resolved "https://registry.yarnpkg.com/@hediet/pdfjs-viewer/-/pdfjs-viewer-0.1.0.tgz#1862f35e61ca666af047b4eea0cd14b9c5eb507b"
+  integrity sha512-yIvxadOqZ/6tQqJxKhHqH3/JcHGoAj2PUN6eKjXnYoKF73y98/52b6obnXuNzYZfX7IUkuL2DWwzmVV7279x9g==
+  dependencies:
+    pdfjs-dist "^2.6.347"
+
 "@hediet/semantic-json@^0.4.1":
   version "0.4.1"
   resolved "https://registry.yarnpkg.com/@hediet/semantic-json/-/semantic-json-0.4.1.tgz#762190c1c8ad79105c2655c6a33b3abc0a1cdfb3"
