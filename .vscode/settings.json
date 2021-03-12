@@ -1,5 +1,6 @@
 {
     "editor.formatOnSave": true,
     "sqltools.connections": [],
-    "sqltools.useNodeRuntime": true
+    "sqltools.useNodeRuntime": true,
+    "rust-analyzer.procMacro.enable": true
 }

@@ -1,0 +1,45 @@
+{
+	"name": "my-application",
+	"version": "0.0.1",
+	"scripts": {
+		"dev": "webpack serve --hot --mode development",
+		"build": "webpack --mode production"
+	},
+	"dependencies": {
+		"classnames": "^2.2.6",
+		"mobx": "^5.15.4",
+		"mobx-react": "^6.2.2",
+		"pdfjs-dist": "^2.6.347",
+		"react": "^16.13.1",
+		"react-dom": "^16.13.1",
+		"video.js": "^7.11.4",
+		"@hediet/std": "0.6.0",
+		"@hediet/json-rpc": "0.3.0",
+		"@hediet/json-rpc-browser": "0.3.0"
+	},
+	"devDependencies": {
+		"@types/video.js": "^7.3.15",
+		"@types/classnames": "^2.2.10",
+		"@types/react": "^16.9.33",
+		"@types/react-dom": "^16.9.6",
+		"@types/copy-webpack-plugin": "^6.4.0",
+		"@types/html-webpack-plugin": "^3.2.2",
+		"@types/webpack": "^4.41.10",
+		"sass": "^1.32.8",
+		"sass-loader": "^11.0.1",
+		"clean-webpack-plugin": "^3.0.0",
+		"copy-webpack-plugin": "^8.0.0",
+		"css-loader": "^3.5.1",
+		"file-loader": "^6.0.0",
+		"html-webpack-plugin": "^5.3.0",
+		"raw-loader": "^4.0.1",
+		"style-loader": "^1.1.3",
+		"ts-loader": "^8.0.17",
+		"ts-node": "^9.1.1",
+		"typescript": "^4.2.3",
+		"url-loader": "^4.1.1",
+		"webpack": "^5.24.3",
+		"webpack-cli": "^4.5.0",
+		"webpack-dev-server": "^3.11.2"
+	}
+}

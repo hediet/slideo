@@ -1,0 +1,19 @@
+@import "~@hediet/pdfjs-viewer/dist/assets/viewer.css";
+
+.playButton {
+	cursor: pointer;
+	user-select: none;
+	opacity: 0.3;
+
+	&:hover {
+		opacity: 1;
+		background: white;
+	}
+}
+
+#viewBookmark,
+#presentationMode,
+#openFile,
+#download {
+	display: none;
+}

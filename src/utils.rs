@@ -1,6 +1,8 @@
+use anyhow::Result;
 use std::{
+    fs::File,
+    io::copy,
     path::{Path, PathBuf},
-    process::Command,
 };
 
 use sha2::{Digest, Sha256};
@@ -23,25 +25,18 @@ pub fn get_temp_path_key(category: &str, key: &str) -> PathBuf {
     return get_temp_path().join(&format!("{}-{}", category, &hash(key)[0..20]));
 }
 
-pub fn pdf_to_images(pdf: &Path) -> Vec<PathBuf> {
-    let path = get_temp_path_key("slides-v1", &pdf.to_str().unwrap());
-
-    if !path.exists() {
-        std::fs::create_dir_all(&path).unwrap();
-
-        let result = Command::new(&"pdftocairo")
-            .arg(&pdf)
-            .arg(&"-png")
-            .arg(&path.join("page"))
-            .status()
-            .expect(&format!("Cairo should extract pdf slides"));
-        if !result.success() {
-            panic!("Cairo failed")
-        }
-    }
-
-    return glob::glob(&path.join(&"*.png").to_string_lossy())
-        .unwrap()
-        .map(|p| p.unwrap())
-        .collect();
+pub fn hash_file(path: &Path) -> Result<String> {
+    let mut file = File::open(path)?;
+    let mut sha256 = Sha256::new();
+    copy(&mut file, &mut sha256)?;
+    Ok(format!("{:x}", sha256.finalize()))
 }
+
+/*
+pub fn fmt_duration(d: Duration) -> String {
+    let seconds = d.as_secs() % 60;
+    let minutes = (d.as_secs() / 60) % 60;
+    let hours = (d.as_secs() / 60) / 60;
+    return format!("{}:{}:{}", hours, minutes, seconds);
+}
+*/
