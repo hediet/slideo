@@ -1,0 +1,71 @@
+name: Run Tests
+on:
+    push:
+        branches:
+            - "*"
+        tags_ignore:
+            - "*"
+        pull_request:
+            branches:
+                - "*"
+jobs:
+    bin:
+        strategy:
+            matrix:
+                rust:
+                    - stable
+                version:
+                    - opencv: 4.1.2
+                      brew: "@4"
+                      features: opencv-4
+                os:
+                    - build: linux
+                      image: ubuntu-18.04
+                      family: linux
+                      target: x86_64-unknown-linux-musl
+
+                    - build: macos
+                      image: macos-10.15
+                      family: osx
+                      target: x86_64-apple-darwin
+
+                    - build: win-msvc
+                      image: windows-2019
+                      family: windows
+                      target: x86_64-pc-windows-msvc
+
+        runs-on: ${{ matrix.os.image }}
+        env:
+            OS_FAMILY: ${{ matrix.os.family }}
+            RUST_TOOLCHAIN: ${{ matrix.rust }}
+            OPENCV_VERSION: ${{ matrix.version.opencv }}
+            CHOCO_OPENCV_VERSION: ${{ matrix.version.opencv }}
+            BREW_OPENCV_VERSION: ${{ matrix.version.brew }}
+            CARGO_FEATURES: ${{ matrix.version.features }}
+        steps:
+            - uses: actions/checkout@v2
+
+            - name: Cache OpenCV dependencies
+              uses: actions/cache@v1
+              with:
+                  path: ~/build
+                  key: ${{ runner.os }}-${{ matrix.version.opencv }}-build
+
+            - name: Install OpenCV dependencies
+              run: ci/install.sh
+              shell: bash
+
+            - name: Install Rust
+              uses: actions-rs/toolchain@v1
+              with:
+                  toolchain: ${{ matrix.rust }}
+                  default: true
+
+            - name: Caches Rust
+              uses: Swatinem/rust-cache@v1
+
+            - name: Build
+              run: |
+                source ./ci/setup-env.sh
+                cargo run
+              shell: bash

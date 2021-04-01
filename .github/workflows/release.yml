@@ -1,0 +1,119 @@
+name: Release
+on:
+    push:
+        # Enable when testing release infrastructure on a branch.
+        #branches:
+        #   - master
+        tags:
+            - "v[0-9]+.[0-9]+.[0-9]+"
+jobs:
+    create-release:
+        runs-on: ubuntu-latest
+        # Set to force version number, e.g., when no tag exists.
+        #env:
+        #PRODUCT_VERSION: TEST-0.0.0
+        outputs:
+            version: ${{ env.PRODUCT_VERSION }}
+            upload_url: ${{ steps.release.outputs.upload_url }}
+        steps:
+            - name: Get the release version from the tag
+              if: env.PRODUCT_VERSION == ''
+              run: |
+                  echo "PRODUCT_VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+            - name: Create GitHub release
+              id: release
+              uses: actions/create-release@v1
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              with:
+                  tag_name: ${{ env.PRODUCT_VERSION }}
+                  release_name: ${{ env.PRODUCT_VERSION }}
+    build-artifact:
+        needs: ["create-release"]
+        strategy:
+            matrix:
+                rust:
+                    - stable
+                version:
+                    - opencv: 4.1.2
+                      brew: "@4"
+                      features: opencv-4
+                os:
+                    - build: linux
+                      image: ubuntu-18.04
+                      family: linux
+                      target: x86_64-unknown-linux-musl
+                    - build: macos
+                      image: macos-10.15
+                      family: osx
+                      target: x86_64-apple-darwin
+                    - build: win-msvc
+                      image: windows-2019
+                      family: windows
+                      target: x86_64-pc-windows-msvc
+
+        runs-on: ${{ matrix.os.image }}
+        env:
+            OS_FAMILY: ${{ matrix.os.family }}
+            RUST_TOOLCHAIN: ${{ matrix.rust }}
+            OPENCV_VERSION: ${{ matrix.version.opencv }}
+            CHOCO_OPENCV_VERSION: ${{ matrix.version.opencv }}
+            BREW_OPENCV_VERSION: ${{ matrix.version.brew }}
+            CARGO_FEATURES: ${{ matrix.version.features }}
+        steps:
+            - uses: actions/checkout@v2
+
+            - name: Cache OpenCV dependencies
+              uses: actions/cache@v1
+              with:
+                  path: ~/build
+                  key: ${{ runner.os }}-${{ matrix.version.opencv }}-build
+
+            - name: Install OpenCV dependencies
+              run: ci/install.sh
+              shell: bash
+
+            - name: Install Rust
+              uses: actions-rs/toolchain@v1
+              with:
+                  toolchain: ${{ matrix.rust }}
+                  default: true
+
+            - name: Caches Rust
+              uses: Swatinem/rust-cache@v1
+
+            - name: Build
+              run: |
+                  source ./ci/setup-env.sh
+                  cargo build --release
+              shell: bash
+
+            - name: Build archive
+              shell: bash
+              run: |
+                  staging="build-${{ matrix.os.build }}-${{ needs.create-release.outputs.version }}"
+                  mkdir -p "$staging"
+                  cp {README.md,LICENSE.md} "$staging/"
+                  if [ "${{ matrix.os.family }}" = "windows" ]; then
+
+                    cp "target/release/slideo.exe" "$staging/"
+                    cp "C:\tools\opencv\build\x64\vc15\bin\opencv_world412.dll" "$staging/"
+
+                    7z a "$staging.zip" "$staging"
+                    echo "ASSET=$staging.zip" >> $GITHUB_ENV
+                  else
+
+                    cp "target/release/slideo" "$staging/"
+
+                    tar czf "$staging.tar.gz" "$staging"
+                    echo "ASSET=$staging.tar.gz" >> $GITHUB_ENV
+                  fi
+            - name: Upload release archive
+              uses: actions/upload-release-asset@v1.0.1
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              with:
+                  upload_url: ${{ needs.create-release.outputs.upload_url }}
+                  asset_path: ${{ env.ASSET }}
+                  asset_name: ${{ env.ASSET }}
+                  asset_content_type: application/octet-stream
