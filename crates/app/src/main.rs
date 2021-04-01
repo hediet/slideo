@@ -1,5 +1,3 @@
-#![feature(proc_macro_hygiene, decl_macro)]
-
 mod checked_path;
 mod db;
 mod pdf_to_images;
