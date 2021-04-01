@@ -82,6 +82,26 @@ jobs:
             - name: Caches Rust
               uses: Swatinem/rust-cache@v1
 
+            - name: Cache Webview Build
+              id: cache-webview
+              uses: actions/cache@v1
+              with:
+                  path: ./webview/dist
+                  key: ${{ hashFiles('./webview/**/*') }}-webview-build
+            - name: Install Node.js
+              if: steps.cache-webview.outputs.cache-hit != 'true'
+              uses: actions/setup-node@v1
+              with:
+                  node-version: 10.x
+            - name: Install Webview Packages
+              if: steps.cache-webview.outputs.cache-hit != 'true'
+              run: yarn install --frozen-lockfile
+              working-directory: webview
+            - name: Build Webview
+              if: steps.cache-webview.outputs.cache-hit != 'true'
+              run: yarn build
+              working-directory: webview
+
             - name: Build
               run: |
                   source ./ci/setup-env.sh

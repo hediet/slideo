@@ -14,7 +14,7 @@ Go to the releases and download and extract the appropriate release.
 
 If you are not a windows user, please also install:
 
--   OpenCV 4.1.2
+-   OpenCV 4.5.1
 -   Poppler
 
 ## Usage

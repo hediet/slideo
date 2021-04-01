@@ -2,11 +2,14 @@ use crate::db::{DbPool, PdfVideoMatching};
 use actix_cors::Cors;
 use actix_files::NamedFile;
 use actix_web::{
+    body::Body,
     get,
     web::{self, Json},
     App, HttpServer,
 };
 use anyhow::{anyhow, Result};
+use rust_embed::RustEmbed;
+use std::borrow::Cow;
 
 struct AppState {
     db_pool: DbPool,
@@ -63,6 +66,35 @@ async fn files_handler(
     }
 }
 
+#[derive(RustEmbed)]
+#[folder = "../../webview/dist"]
+struct Dist;
+
+fn handle_embedded_file(path: &str) -> web::HttpResponse {
+    match Dist::get(path) {
+        Some(content) => {
+            let body: Body = match content {
+                Cow::Borrowed(bytes) => bytes.into(),
+                Cow::Owned(bytes) => bytes.into(),
+            };
+            web::HttpResponse::Ok()
+                .content_type(mime_guess::from_path(path).first_or_octet_stream().as_ref())
+                .body(body)
+        }
+        None => web::HttpResponse::NotFound().body("404 Not Found"),
+    }
+}
+
+#[get("/")]
+fn index() -> web::HttpResponse {
+    handle_embedded_file("index.html")
+}
+
+#[get("_:.*")]
+fn dist(path: web::Path<String>) -> web::HttpResponse {
+    handle_embedded_file(&path.0)
+}
+
 #[actix_web::main]
 pub async fn start_server(pdf_hash: Option<String>) -> Result<()> {
     let db_pool = DbPool::connect().await?;
@@ -84,7 +116,8 @@ pub async fn start_server(pdf_hash: Option<String>) -> Result<()> {
             })
             .service(files_handler)
             .service(pdf_matches_handler)
-            .service(actix_files::Files::new("/", "./webview/dist").index_file("index.html"))
+            .service(index)
+            .service(dist)
     })
     .bind("127.0.0.1:63944")?
     .run()
