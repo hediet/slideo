@@ -18,7 +18,7 @@ impl BaseFlannMatcher {
         index_params.set_int(&"multi_probe_level", 1).unwrap();
         index_params.set_algorithm(FLANN_INDEX_LSH).unwrap();
 
-        let search_params = Ptr::new(SearchParams::new(32, 0.0, true).unwrap());
+        let search_params = Ptr::new(SearchParams::new(32, 0.0, true, false).unwrap());
 
         let matcher = FlannBasedMatcher::new(&index_params, &search_params).unwrap();
 
