@@ -66,6 +66,6 @@ jobs:
 
             - name: Build
               run: |
-                source ./ci/setup-env.sh
-                cargo run
+                  source ./ci/setup-env.sh
+                  cargo run -- --help
               shell: bash
