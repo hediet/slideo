@@ -118,7 +118,10 @@ jobs:
 
                     cp "target/release/slideo.exe" "$staging/"
                     cp "C:\tools\opencv\build\x64\vc15\bin\opencv_world451.dll" "$staging/"
-
+                    cp "C:\tools\opencv\build\x64\vc15\bin\opencv_videoio_ffmpeg451_64.dll" "$staging/"
+                    cp "C:\tools\opencv\LICENSE_FFMPEG.txt" "$staging/"
+                    cp "C:\tools\opencv\LICENSE.txt" "$staging/LICENSE_OPENCV.txt"
+                    
                     7z a "$staging.zip" "$staging"
                     echo "ASSET=$staging.zip" >> $GITHUB_ENV
                   else
