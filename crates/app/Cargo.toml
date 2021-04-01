@@ -1,0 +1,33 @@
+[package]
+name = "slideo"
+version = "0.1.0"
+authors = ["Henning Dieterichs <henning.dieterichs@live.de>"]
+edition = "2018"
+
+[dependencies]
+base64 = "0.13.0"
+indicatif = {version = "*", features = ["rayon"]}
+rayon = "1.5.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+structopt = "0.3"
+anyhow = "1.0.38"
+sha2 = "0.9.3"
+sqlx = { version = "0.5.1", features = [ "sqlite", "runtime-async-std-rustls", "migrate" ] }
+async-std = { version = "1.6", features = [ "attributes" ] }
+thiserror = "1.0"
+lazy_static = "1.4.0"
+dialoguer = "0.7.1"
+glob = "0.3.0"
+lexical-sort = "0.3.1"
+rand = "0.8.3"
+actix-web = "3"
+actix-files = "0.5.0"
+actix-cors = "0.5.4"
+app_dirs = "^1.2.1"
+image = "0.23.14"
+imageproc = "0.22.0"
+space = "0.10.3"
+rand_core = "0.6.1"
+matching = { path = "../matching" }
+matching-opencv = { path = "../matching-opencv" }

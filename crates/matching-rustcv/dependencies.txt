@@ -1,0 +1,2 @@
+cv = { git = "https://github.com/rust-cv/cv", branch = "master" }
+arrsac = { git = "https://github.com/rust-cv/arrsac" }

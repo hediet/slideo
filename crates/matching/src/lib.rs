@@ -1,9 +1,5 @@
-mod opencv;
-
 use std::path::Path;
 use std::time::Duration;
-
-pub use self::opencv::OpenCVImageVideoMatcher;
 
 pub trait ImageVideoMatcher<P: ProgressReporter + Copy> {
     fn create_video_matcher<'i, I: MatchableImage + Send + Sync + Copy + Eq + 'i>(

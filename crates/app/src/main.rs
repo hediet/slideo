@@ -2,7 +2,6 @@
 
 mod checked_path;
 mod db;
-mod matching;
 mod pdf_to_images;
 mod utils;
 mod video_exts;
@@ -12,8 +11,8 @@ use anyhow::{Context, Result};
 use checked_path::{CheckedPath, Kind};
 use db::DbPool;
 use dialoguer::Confirm;
-use matching::{ImageVideoMatcher, Matching, OpenCVImageVideoMatcher};
-use matching::{MatchableImage, ProgressReporter};
+use matching::{ImageVideoMatcher, MatchableImage, Matching, ProgressReporter};
+use matching_opencv::OpenCVImageVideoMatcher;
 use pdf_to_images::{pdfs_to_images, PdfPage};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use std::collections::HashSet;
@@ -28,12 +27,11 @@ struct Opt {
     #[structopt(name = "FILES", parse(from_os_str), required = true)]
     files: Vec<PathBuf>,
 
+    /// Invalidates any cached mapping entries that exist for the given files.
     #[structopt(long)]
     invalidate_video_cache: bool,
-    /*
-       #[structopt(long)]
-       ignore_video_ext: bool,
-    */
+
+    /// Does not wait for user input.
     #[structopt(long)]
     non_interactive: bool,
 }

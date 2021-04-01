@@ -1,0 +1,7 @@
+[package]
+name = "matching"
+version = "0.1.0"
+authors = ["Henning Dieterichs <henning.dieterichs@live.de>"]
+edition = "2018"
+
+[dependencies]

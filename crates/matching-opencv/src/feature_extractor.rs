@@ -16,7 +16,7 @@ pub struct KeypointsWithDescriptors {
 
 impl FeatureExtractor {
     pub fn default() -> FeatureExtractor {
-        let orb = ORB::create(
+        let orb = <dyn ORB>::create(
             /* nfeatures: */ 2000,
             /* scale_factor: */ 1.2,
             /* nlevels: */ 8,

@@ -7,8 +7,8 @@ use self::{
     flann::FlannMatcher,
     image_utils::{get_similarity, to_small_image, Transformation2D},
 };
-use super::{ImageVideoMatcher, MatchableImage, Matching, ProgressReporter, VideoMatcher};
 use feature_extractor::FeatureExtractor;
+use matching::{ImageVideoMatcher, MatchableImage, Matching, ProgressReporter, VideoMatcher};
 use opencv::{
     core::{KeyPoint, Scalar},
     //highgui::{imshow, wait_key},

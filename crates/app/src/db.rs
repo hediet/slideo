@@ -12,7 +12,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::{matching::Matching, pdf_to_images::PdfPage};
+use crate::pdf_to_images::PdfPage;
+use matching::Matching;
 
 #[derive(Clone)]
 pub struct DbPool {
