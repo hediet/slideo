@@ -26,15 +26,6 @@ pub fn get_similarity(img1: &Mat, img2: &Mat) -> f32 {
     return 1.0 - (error_l2 as f32) / max_error;
 }
 
-/*
-fn mat_to_base64_string(mat: Mat) -> String {
-    let mut data = Vector::new();
-    opencv::imgcodecs::imencode(&".png", &mat, &mut data, &Vector::new()).unwrap();
-    let data = encode(data);
-    return data;
-}
-*/
-
 pub struct Transformation2D {
     pub mat: Mat,
 }

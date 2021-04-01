@@ -1,0 +1,209 @@
+use arrsac::Arrsac;
+use cv::{
+    feature::akaze::{Akaze, KeyPoint},
+    nalgebra::{abs, EuclideanNorm, Matrix, Norm, Point2, Vector2},
+    BitArray, Consensus,
+};
+use cv::{knn::linear_knn, nalgebra::Point};
+use cv::{nalgebra::U2, vis::imgshow};
+use image::{DynamicImage, GenericImage, GenericImageView, ImageBuffer, Primitive, Rgba};
+use imageproc::{definitions::Image, drawing};
+use space::Neighbor;
+
+use rand::{self, SeedableRng};
+use std::{
+    iter::{once, Once},
+    path::Path,
+    time::{Instant, SystemTime},
+};
+
+pub fn random_color(alpha: u8) -> Rgba<u8> {
+    Rgba([rand::random(), rand::random(), rand::random(), alpha])
+}
+
+pub fn render_akaze_keypoints(
+    image: &DynamicImage,
+    keypoints: impl Iterator<Item = KeyPoint>,
+) -> DynamicImage {
+    let mut image = drawing::Blend(image.to_rgba8());
+    for KeyPoint {
+        point: (x, y),
+        size,
+        ..
+    } in keypoints
+    {
+        drawing::draw_filled_circle_mut(
+            &mut image,
+            (x as i32, y as i32),
+            size as i32,
+            random_color(100),
+        );
+    }
+    DynamicImage::ImageRgba8(image.0)
+}
+
+pub fn concat_horizontal<I>(image1: &I, image2: &I) -> Image<I::Pixel>
+where
+    I: GenericImage,
+    I::Pixel: 'static,
+{
+    let mut out = ImageBuffer::new(
+        image1.width() + image2.width(),
+        std::cmp::max(image1.height(), image2.height()),
+    );
+    out.copy_from(image1, 0, 0).unwrap();
+    out.copy_from(image2, image1.width(), 0).unwrap();
+    out
+}
+
+pub fn render_akaze_keypoint_matching(
+    image1: &DynamicImage,
+    image2: &DynamicImage,
+    keypoints: impl Iterator<Item = (KeyPoint, KeyPoint)>,
+) -> DynamicImage {
+    let mut image = concat_horizontal(image1, image2);
+
+    for (k1, k2) in keypoints {
+        drawing::draw_line_segment_mut(
+            &mut image,
+            k1.point,
+            (k2.point.0 + image1.width() as f32, k2.point.1),
+            random_color(100),
+        );
+    }
+    DynamicImage::ImageRgba8(image)
+}
+
+fn filter_2d(
+    points: impl Iterator<Item = (Point2<f32>, Point2<f32>)> + Clone,
+) -> Option<Vec<usize>> {
+    let r = rand::rngs::StdRng::seed_from_u64(0);
+    let mut a = Arrsac::new(10.0, r);
+    println!("{}", points.clone().count());
+    if let Some((model, inliers)) = a.model_inliers(&TranslationScaleModelEstimator {}, points) {
+        Some(inliers)
+    } else {
+        None
+    }
+}
+
+type Mapping = (Point2<f32>, Point2<f32>);
+
+struct TranslationScaleModel {
+    f: f32,
+    d: Vector2<f32>,
+}
+
+use cv::sample_consensus::{Estimator, Model};
+
+impl Model<Mapping> for TranslationScaleModel {
+    fn residual(&self, (a, b): &Mapping) -> f64 {
+        let p: Vector2<f32> = (self.f * (*a) + self.d) - *b;
+        EuclideanNorm.norm(&p) as f64
+    }
+}
+
+struct TranslationScaleModelEstimator {}
+
+impl Estimator<Mapping> for TranslationScaleModelEstimator {
+    type Model = TranslationScaleModel;
+    type ModelIter = std::option::IntoIter<TranslationScaleModel>;
+    const MIN_SAMPLES: usize = 2;
+
+    fn estimate<I>(&self, data: I) -> Self::ModelIter
+    where
+        I: Iterator<Item = Mapping> + Clone,
+    {
+        let mut d = data.clone();
+        let (a1, b1) = d.next().unwrap();
+        let (a2, b2) = d.next().unwrap();
+
+        let f = ((b1.x - b2.x) / (a1.x - a2.x) + (b1.y - b2.y) / (a1.y - a2.y)) / 2.0;
+
+        if f < 0.1 || f > 3.0 {
+            return None.into_iter();
+        }
+
+        let d1 = b1 - (a1 / f);
+        let d2 = b2 - (a2 / f);
+
+        Some(TranslationScaleModel {
+            f,
+            d: (d1 + d2) / 2.0,
+        })
+        .into_iter()
+    }
+}
+
+fn main() {
+    println!("bar");
+    let akaze = Akaze {
+        num_sublevels: 2,
+        max_octave_evolution: 3,
+        base_scale_offset: 1.6f64,
+        initial_contrast: 0.001f64,
+        contrast_percentile: 0.7f64,
+        contrast_factor_num_bins: 300,
+        derivative_factor: 1.5f64,
+        detector_threshold: 0.01f64,
+        descriptor_channels: 3usize,
+        descriptor_pattern_size: 10usize,
+    };
+    let img1 = image::open("data/matchings/test1/1-frame.png").unwrap();
+    let img2 = image::open("data/matchings/test1/1-slide.png").unwrap();
+
+    //let hsnf = cv::knn::hnsw::HNSW;
+    //hsnf.
+
+    println!("check");
+
+    let t = SystemTime::now();
+    let features1 = akaze.extract(&img1);
+    let features2 = akaze.extract(&img2);
+
+    /*
+    let img1 = render_akaze_keypoints(&img1, features1.0.iter().copied());
+    let img2 = render_akaze_keypoints(&img2, features2.0.iter().copied());
+    */
+
+    println!("got features {:?}", t.elapsed().unwrap());
+
+    let mut matchings: Vec<usize> = Vec::new();
+    let mut neighbors = [Neighbor {
+        index: 0,
+        distance: 0,
+    }];
+    for f in &features1.1 {
+        linear_knn(f, &mut neighbors, features2.1.iter());
+        matchings.push(neighbors[0].index);
+    }
+
+    //imageproc::drawing::concat
+    println!("optimizing, got {}", matchings.len());
+
+    let inliers = filter_2d(matchings.iter().enumerate().map(|(i1, i2)| {
+        let kp1 = features1.0[i1];
+        let kp2 = features2.0[*i2];
+        (
+            Point2::new(kp1.point.0, kp1.point.1),
+            Point2::new(kp2.point.0, kp2.point.1),
+        )
+    }))
+    .unwrap_or(Vec::new());
+
+    println!("test");
+    //let img2 = render_akaze_keypoints(&img1, 30.0);
+    //imgshow(&img2);
+    //let mut d: DynamicImage = DynamicImage::ImageRgba8(concat_horizontal(&img1, &img2));
+
+    let d = render_akaze_keypoint_matching(
+        &img1,
+        &img2,
+        inliers
+            .into_iter()
+            .map(|i| (features1.0[i], features2.0[matchings[i]])),
+    );
+
+    imgshow(&d);
+    imgshow(&d);
+}

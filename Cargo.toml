@@ -29,3 +29,9 @@ actix-web = "3"
 actix-files = "0.5.0"
 actix-cors = "0.5.4"
 app_dirs = "^1.2.1"
+cv = { git = "https://github.com/rust-cv/cv", branch = "master" }
+image = "0.23.14"
+imageproc = "0.22.0"
+space = "0.10.3"
+rand_core = "0.6.1"
+arrsac = { git = "https://github.com/rust-cv/arrsac" }
