@@ -35,7 +35,7 @@ jobs:
                 rust:
                     - stable
                 version:
-                    - opencv: 4.1.2
+                    - opencv: 4.5.1
                       brew: "@4"
                       features: opencv-4
                 os:
@@ -117,7 +117,7 @@ jobs:
                   if [ "${{ matrix.os.family }}" = "windows" ]; then
 
                     cp "target/release/slideo.exe" "$staging/"
-                    cp "C:\tools\opencv\build\x64\vc15\bin\opencv_world412.dll" "$staging/"
+                    cp "C:\tools\opencv\build\x64\vc15\bin\opencv_world451.dll" "$staging/"
 
                     7z a "$staging.zip" "$staging"
                     echo "ASSET=$staging.zip" >> $GITHUB_ENV
