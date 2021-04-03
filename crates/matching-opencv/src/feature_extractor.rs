@@ -8,12 +8,6 @@ pub struct FeatureExtractor {
     ptr: Ptr<dyn features2d::ORB>,
 }
 
-#[derive(Debug)]
-pub struct KeypointsWithDescriptors {
-    pub keypoints: Vector<KeyPoint>,
-    pub descriptors: Mat,
-}
-
 impl FeatureExtractor {
     pub fn default() -> FeatureExtractor {
         let orb = <dyn ORB>::create(
@@ -29,7 +23,7 @@ impl FeatureExtractor {
         )
         .unwrap();
 
-        return FeatureExtractor { ptr: orb };
+        FeatureExtractor { ptr: orb }
     }
 
     pub fn find_keypoints_and_descriptors(&mut self, src: &Mat) -> KeypointsWithDescriptors {
@@ -45,9 +39,15 @@ impl FeatureExtractor {
             )
             .unwrap();
 
-        return KeypointsWithDescriptors {
+        KeypointsWithDescriptors {
             descriptors,
             keypoints,
-        };
+        }
     }
+}
+
+#[derive(Debug)]
+pub struct KeypointsWithDescriptors {
+    pub keypoints: Vector<KeyPoint>,
+    pub descriptors: Mat,
 }

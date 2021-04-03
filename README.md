@@ -23,6 +23,7 @@ If you are not a windows user, please also install:
 
 Any given lecture slide can appear in any given video.
 For performance and accuracy, keep the amount of pdf files small and prefer seperate invocations.
+Usually, an entire lecture (<1000 slides) works well.
 
 ```sh
 slideo lecture1.pdf lecture2.pdf video1.mp4 video2.mp4

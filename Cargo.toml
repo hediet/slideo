@@ -2,5 +2,6 @@
 members = [
     "crates/app",
     "crates/matching",
-    "crates/matching-opencv"
+    "crates/matching-opencv",
+    "crates/pdftocairo",
 ]

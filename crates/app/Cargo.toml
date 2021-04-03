@@ -33,3 +33,4 @@ matching = { path = "../matching" }
 matching-opencv = { path = "../matching-opencv" }
 rust-embed="5.9.0"
 mime_guess = "2.0.3"
+pdftocairo = { path = "../pdftocairo" }

@@ -22,7 +22,7 @@ impl BaseFlannMatcher {
 
         let matcher = FlannBasedMatcher::new(&index_params, &search_params).unwrap();
 
-        return BaseFlannMatcher { matcher };
+        BaseFlannMatcher { matcher }
     }
 
     pub fn add_descriptors<'a, I>(self: &mut Self, descriptors: I)
@@ -39,7 +39,7 @@ impl BaseFlannMatcher {
         self.matcher
             .knn_match(descriptors, &mut matches, k, masks, false)
             .unwrap();
-        return matches;
+        matches
     }
 
     pub fn train(self: &mut Self) {
@@ -62,10 +62,7 @@ pub struct FlannMatcher {
 }
 
 impl FlannMatcher {
-    pub fn new<'a, I>(descriptors: I) -> Self
-    where
-        I: Iterator<Item = Mat>,
-    {
+    pub fn new(descriptors: impl Iterator<Item = Mat>) -> Self {
         let mut matcher = BaseFlannMatcher::default();
         matcher.add_descriptors(descriptors);
         matcher.train();

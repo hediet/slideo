@@ -3,14 +3,17 @@ use crate::{
     utils::get_temp_path_key,
     HashedFile,
 };
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use async_std::task::block_on;
 use lexical_sort::{natural_lexical_cmp, PathSort};
+use matching::ProgressReporter;
+use pdftocairo::pdf_info;
 use rand::Rng;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::{
-    fs::create_dir_all,
+    collections::HashMap,
     path::{Path, PathBuf},
-    process::Command,
+    sync::{Arc, Mutex},
 };
 
 #[derive(Debug, Eq, PartialEq)]
@@ -24,17 +27,21 @@ pub struct PdfPage<'t> {
 pub fn pdfs_to_images<'t>(
     pdf_files: &Vec<&'t HashedFile>,
     db_pool: &DbPool,
+    progress_reporter: ProgressReporter,
 ) -> Result<Vec<PdfPage<'t>>> {
-    print!("Extracting pdf pages...");
+    let mut pdf_files = pdf_files.clone();
+    pdf_files.dedup_by_key(|p| &p.hash); // Remove duplicated pdf files
+
+    let total_page_count: u32 = pdf_files
+        .par_iter()
+        .map(|f| pdf_info(&f.path).unwrap().page_count())
+        .sum();
+
+    let progresses = Arc::new(Mutex::new(HashMap::new()));
 
     let result: Result<Vec<Vec<PdfPage<'t>>>> = pdf_files
-        .into_iter()
+        .par_iter()
         .map(|f| -> Result<Vec<PdfPage<'t>>> {
-            println!(
-                "Processing pdf '{}', hash '{}'",
-                f.path.to_string_lossy(),
-                f.hash
-            );
             let mut db = block_on(db_pool.db())?;
             let mut tx = block_on(db.begin_trans())?;
             let result: Option<PdfExtractedPagesDir> =
@@ -62,7 +69,16 @@ pub fn pdfs_to_images<'t>(
 
             block_on(tx.commit())?;
 
-            let pages = pdf_to_images(&f.hash, &f.path, &target_dir)?;
+            let pages = pdf_to_images(&f.hash, &f.path, &target_dir, |processed_pages| {
+                let mut map = progresses.lock().unwrap();
+                map.insert(&f.hash, processed_pages);
+                let total_processed_pages: u32 = map.values().sum();
+                progress_reporter.report(
+                    total_processed_pages as u64,
+                    total_page_count as u64,
+                    "Extracting PDF pages...",
+                );
+            })?;
 
             if !finished {
                 let mut tx = block_on(db.begin_trans())?;
@@ -78,8 +94,13 @@ pub fn pdfs_to_images<'t>(
         })
         .collect();
 
+    progress_reporter.report(
+        total_page_count as u64,
+        total_page_count as u64,
+        "PDF extraction successful.",
+    );
+
     let flatten = result.into_iter().flatten().flatten().collect();
-    println!(" Finished!");
     Ok(flatten)
 }
 
@@ -87,19 +108,26 @@ fn pdf_to_images<'t>(
     pdf_hash: &'t str,
     pdf_path: &'t Path,
     target_dir: &Path,
+    progress: impl Fn(u32),
 ) -> Result<Vec<PdfPage<'t>>> {
-    if !target_dir.exists() {
-        create_dir_all(&target_dir).unwrap();
+    /*
+    if target_dir.exists() {
+        println!("Removing {:?}", target_dir);
+        std::fs::remove_dir_all(target_dir).unwrap();
+    }
+    */
 
-        let result = Command::new(&"pdftocairo")
-            .arg(&pdf_path)
-            .arg(&"-png")
-            .arg(&target_dir.join("page"))
-            .status()
-            .expect(&format!("Cairo should extract pdf slides"));
-        if !result.success() {
-            return Err(anyhow!("Cairo failed"));
-        }
+    if !target_dir.exists() {
+        pdftocairo::pdftocairo(
+            pdf_path,
+            target_dir,
+            pdftocairo::Options {
+                progress: Some(|p: pdftocairo::ProgressInfo| {
+                    progress(p.processed_pages);
+                }),
+                ..pdftocairo::Options::default()
+            },
+        )?;
     }
 
     let mut vec: Vec<PathBuf> = glob::glob(&target_dir.join(&"*.png").to_string_lossy())
@@ -107,6 +135,8 @@ fn pdf_to_images<'t>(
         .map(|p| p.unwrap())
         .collect();
     vec.path_sort(natural_lexical_cmp);
+
+    progress(vec.len() as u32);
 
     Ok(vec
         .into_iter()

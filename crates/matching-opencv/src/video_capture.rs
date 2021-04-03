@@ -4,7 +4,7 @@ use opencv::{
 };
 use std::{path::Path, rc::Rc, time::Duration};
 
-use super::image_utils::{get_similarity, to_small_image};
+use super::image_utils::{compute_similarity, to_small_image};
 
 pub struct VideoCaptureIter {
     video: VideoCapture,
@@ -81,27 +81,23 @@ impl<I> Iterator for FilterIter<I>
 where
     I: Iterator<Item = (Mat, Duration, usize)>,
 {
-    type Item = (Mat, Duration, usize);
+    type Item = (bool, Mat, Duration, usize);
 
-    fn next(&mut self) -> Option<(Mat, Duration, usize)> {
-        loop {
-            if let Some((frame, frame_time, frame_idx)) = self.iter.next() {
-                let scaled_frame = to_small_image(&frame);
-                let similarity = if let Some(last_frame) = &self.last_frame {
-                    get_similarity(last_frame, &scaled_frame)
-                } else {
-                    0.0
-                };
-
-                let rc = Rc::new(scaled_frame);
-
-                if similarity < 0.98 {
-                    self.last_frame = Some(rc.clone());
-                    return Some((frame, frame_time, frame_idx));
-                }
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some((frame, frame_time, frame_idx)) = self.iter.next() {
+            let scaled_frame = to_small_image(&frame);
+            let similarity = if let Some(last_frame) = &self.last_frame {
+                compute_similarity(last_frame, &scaled_frame)
             } else {
-                return None;
-            }
+                0.0
+            };
+
+            let rc = Rc::new(scaled_frame);
+
+            self.last_frame = Some(rc.clone());
+            Some((similarity < 0.98, frame, frame_time, frame_idx))
+        } else {
+            None
         }
     }
 }

@@ -5,10 +5,12 @@ mod video_capture;
 
 use self::{
     flann::FlannMatcher,
-    image_utils::{get_similarity, to_small_image, Transformation2D},
+    image_utils::{compute_similarity, to_small_image, Transformation2D},
 };
 use feature_extractor::FeatureExtractor;
-use matching::{ImageVideoMatcher, MatchableImage, Matching, ProgressReporter, VideoMatcher};
+use matching::{
+    ImageVideoMatcher, MatchableImage, Matching, ProgressReporter, VideoMatcher, VideoMatcherTask,
+};
 use opencv::{
     core::{KeyPoint, Scalar},
     //highgui::{imshow, wait_key},
@@ -16,11 +18,11 @@ use opencv::{
     imgproc::{cvt_color, warp_affine, COLOR_BGRA2BGR, WARP_INVERSE_MAP},
     prelude::*,
 };
-use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 use std::{cell::RefCell, sync::Mutex};
+use std::{collections::HashMap, path::PathBuf};
 use thread_local::ThreadLocal;
 use video_capture::{FilterIter, VideoCaptureIter};
 
@@ -28,32 +30,26 @@ use video_capture::{FilterIter, VideoCaptureIter};
 pub struct OpenCVImageVideoMatcher {}
 
 impl OpenCVImageVideoMatcher {
-    fn create_video_matcher<
-        'i,
-        I: MatchableImage + Send + Sync + Copy + Eq + 'i,
-        P: ProgressReporter + Copy,
-    >(
+    fn create_video_matcher<'i, I: MatchableImage + Send + Sync + Copy + Eq + 'i>(
         &self,
         images: Vec<I>,
-        _progress_reporter: P,
     ) -> OpenCVVideoMatcher<I> {
         let processed_images: Vec<ProcessedImage<I>> =
             images.into_iter().map(ProcessedImage::compute).collect();
 
         OpenCVVideoMatcher {
             shared_flanns: Arc::new(ThreadLocal::new()),
-            images: processed_images,
+            images: Arc::new(processed_images),
         }
     }
 }
 
-impl<P: ProgressReporter + Copy + Send + Sync> ImageVideoMatcher<P> for OpenCVImageVideoMatcher {
-    fn create_video_matcher<'i, I: MatchableImage + Send + Sync + Copy + Eq + 'i>(
+impl<'i> ImageVideoMatcher<'i> for OpenCVImageVideoMatcher {
+    fn create_video_matcher<I: MatchableImage + Send + Sync + Copy + Eq + 'i>(
         &self,
         images: Vec<I>,
-        progress_reporter: P,
-    ) -> Box<dyn VideoMatcher<I, P> + 'i> {
-        Box::new(self.create_video_matcher(images, progress_reporter))
+    ) -> Box<dyn VideoMatcher<'i, I> + 'i> {
+        Box::new(self.create_video_matcher(images))
     }
 }
 
@@ -115,20 +111,49 @@ impl<I: MatchableImage> ProcessedImage<I> {
 }
 
 struct OpenCVVideoMatcher<I: Send> {
-    images: Vec<ProcessedImage<I>>,
+    images: Arc<Vec<ProcessedImage<I>>>,
     shared_flanns: Arc<ThreadLocal<RefCell<FlannMatcher>>>,
 }
 
-impl<I: MatchableImage + Send + Copy + Eq, P: ProgressReporter + Copy + Send + Sync>
-    VideoMatcher<I, P> for OpenCVVideoMatcher<I>
-{
-    fn match_images_with_video(&self, video_path: &Path, progress_reporter: P) -> Vec<Matching<I>> {
+impl<'i, I: MatchableImage + Send + Copy + Eq + 'i> VideoMatcher<'i, I> for OpenCVVideoMatcher<I> {
+    fn match_images_with_video(
+        &self,
+        video_path: &Path,
+        progress_reporter: ProgressReporter,
+    ) -> Box<dyn VideoMatcherTask<I> + 'i> {
+        let interval = Duration::from_secs(5);
+        let vid = VideoCaptureIter::open(&video_path, interval);
+        let total_time = vid.total_time();
+        let frames_to_process = (total_time.as_secs_f64() / interval.as_secs_f64()) as u64;
+
+        progress_reporter.report(0, frames_to_process, "");
+
+        Box::new(OpenCVVideoMatcherTask {
+            images: self.images.clone(),
+            shared_flanns: self.shared_flanns.clone(),
+            video_path: video_path.to_owned(),
+            progress_reporter,
+        })
+    }
+}
+
+struct OpenCVVideoMatcherTask<I: Send> {
+    images: Arc<Vec<ProcessedImage<I>>>,
+    shared_flanns: Arc<ThreadLocal<RefCell<FlannMatcher>>>,
+    video_path: PathBuf,
+    progress_reporter: ProgressReporter,
+}
+
+impl<I: MatchableImage + Send + Copy + Eq> VideoMatcherTask<I> for OpenCVVideoMatcherTask<I> {
+    fn process(&self) -> Vec<Matching<I>> {
         let results = Arc::new(Mutex::new(Vec::<Matching<I>>::new()));
 
         rayon::scope_fifo(|s| {
-            let vid = VideoCaptureIter::open(video_path, Duration::from_secs(5));
+            let interval = Duration::from_secs(5);
+            let vid = VideoCaptureIter::open(&self.video_path, interval);
             let total_time = vid.total_time();
             let total_frames = vid.total_frames();
+            let frames_to_process = (total_time.as_secs_f64() / interval.as_secs_f64()) as u32;
             let video_frames = FilterIter::new(vid);
 
             // Add a matching to indicate the last frame.
@@ -140,22 +165,43 @@ impl<I: MatchableImage + Send + Copy + Eq, P: ProgressReporter + Copy + Send + S
                 video_time: total_time,
             });
 
-            for (frame, frame_time, frame_idx) in video_frames {
+            let progress = Arc::new(Mutex::new(0));
+            let report_progress = Arc::new(move || {
+                let mut p = progress.lock().unwrap();
+                *p = *p + 1;
+                self.progress_reporter.report(
+                    *p,
+                    frames_to_process as u64,
+                    &format!(
+                        "Processing frames of '{}'...",
+                        self.video_path.file_name().unwrap().to_string_lossy()
+                    ),
+                );
+            });
+
+            for (changed, frame, frame_time, frame_idx) in video_frames {
+                if !changed {
+                    report_progress();
+                    continue;
+                }
+
                 let results = results.clone();
+                //let progress = progress.clone();
+                let report_progress = report_progress.clone();
                 s.spawn_fifo(move |_s| {
-                    let matching = self.match_images_with_frame(
-                        frame,
-                        frame_time,
-                        frame_idx,
-                        progress_reporter,
-                    );
+                    let matching = self.match_images_with_frame(frame, frame_time, frame_idx);
 
                     let mut list = results.lock().unwrap();
                     list.push(matching);
-                    let progress = (frame_idx as f64) / total_frames;
-                    progress_reporter.report(progress as f32);
+                    report_progress();
                 });
             }
+
+            self.progress_reporter.report(
+                frames_to_process as u64,
+                frames_to_process as u64,
+                &format!("Finished!"),
+            );
         });
 
         let mut mappings = results.lock().unwrap().clone();
@@ -177,13 +223,12 @@ impl<I: MatchableImage + Send + Copy + Eq, P: ProgressReporter + Copy + Send + S
     }
 }
 
-impl<I: MatchableImage + Send + Copy> OpenCVVideoMatcher<I> {
-    fn match_images_with_frame<P: ProgressReporter + Copy>(
+impl<I: MatchableImage + Send + Copy + Eq> OpenCVVideoMatcherTask<I> {
+    fn match_images_with_frame(
         &self,
         frame: Mat,
         frame_time: Duration,
         frame_idx: usize,
-        _progress_reporter: P,
     ) -> Matching<I> {
         let mut flann = self
             .shared_flanns
@@ -235,7 +280,7 @@ impl<I: MatchableImage + Send + Copy> OpenCVVideoMatcher<I> {
                 }));
                 let inlier_matches: Vec<_> = matches
                     .into_iter()
-                    .zip(result.inlier_flags())
+                    .zip(result.inlier_flags)
                     .filter(|&(_, is_inlier)| is_inlier)
                     .map(|(m, _)| m)
                     .collect();
@@ -281,7 +326,7 @@ impl<I: MatchableImage + Send + Copy> OpenCVVideoMatcher<I> {
                 .unwrap();
 
                 let frame_proj2 = to_small_image(&frame_proj);
-                let similarity = get_similarity(&frame_proj2, &slide_info.small_img);
+                let similarity = compute_similarity(&frame_proj2, &slide_info.small_img);
                 /*
                 println!("similarity: {}, rating: {}", similarity, rating);
                 imshow(&"test", &frame_proj2).unwrap();
@@ -301,11 +346,14 @@ impl<I: MatchableImage + Send + Copy> OpenCVVideoMatcher<I> {
             .collect::<Vec<_>>();
 
         rated_best_matches.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap());
+
+        /*
         println!(
             "best sim: {:?} best rating: {}",
             rated_best_matches.iter().next().map(|v| v.2),
             best_rating
         );
+        */
 
         // At least a similarity of 0.5 is required
         rated_best_matches.retain(|v| v.2 > 0.5);

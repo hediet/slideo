@@ -9,12 +9,16 @@ use anyhow::{Context, Result};
 use checked_path::{CheckedPath, Kind};
 use db::DbPool;
 use dialoguer::Confirm;
+use indicatif::{ProgressBar, ProgressStyle};
 use matching::{ImageVideoMatcher, MatchableImage, Matching, ProgressReporter};
 use matching_opencv::OpenCVImageVideoMatcher;
 use pdf_to_images::{pdfs_to_images, PdfPage};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use std::collections::HashSet;
-use std::path::{Path, PathBuf};
+use std::{collections::HashSet, sync::Mutex};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 use structopt::StructOpt;
 use utils::hash_file;
 use web::start_server;
@@ -22,6 +26,7 @@ use web::start_server;
 #[derive(StructOpt, Debug)]
 #[structopt(name = "slideo")]
 struct Opt {
+    /// A list of all videos and pdfs to process. If only a single pdf is passed, opens a viewer.
     #[structopt(name = "FILES", parse(from_os_str), required = true)]
     files: Vec<PathBuf>,
 
@@ -147,35 +152,54 @@ async fn main() -> Result<()> {
         }
     }
 
-    let pages = pdfs_to_images(&pdfs.iter().map(|p| p).collect(), &db_pool)?;
+    //println!("Extracting pdf pages...");
+    let reporter = IndicatifProgressReporter::default();
+
+    let pages = pdfs_to_images(
+        &pdfs.iter().map(|p| p).collect(),
+        &db_pool,
+        reporter.get_reporter(),
+    )?;
+    reporter.finish();
+
+    println!("Analyzing frames...");
 
     let mut tx = db.begin_trans().await?;
     for video in &videos_to_process {
-        //let mapping_info = tx.find_mapping_info(&video.hash).await?;
         tx.create_or_reset_video(&video.hash, pdfs.iter().map(|v| &v.hash as &str))
             .await?;
     }
     tx.commit().await?;
 
-    let m = OpenCVImageVideoMatcher::default();
+    let matcher = OpenCVImageVideoMatcher::default();
 
-    let reporter = ConsoleProgressReporter::new();
+    let video_matcher = matcher.create_video_matcher(pages.iter().collect());
 
-    let video_matcher = m.create_video_matcher(pages.iter().collect(), &reporter);
+    let base_reporter = IndicatifProgressReporter::default();
+    let reporter = ComposedProgressReporter::new(base_reporter.get_reporter());
 
-    for video in &videos_to_process {
-        let matchings: Vec<Matching<&PdfPage>> =
-            video_matcher.match_images_with_video(&video.path, &reporter);
+    let tasks: Vec<_> = videos_to_process
+        .iter()
+        .map(|video| {
+            (
+                video,
+                video_matcher.match_images_with_video(&video.path, reporter.create_nested()),
+            )
+        })
+        .collect();
+
+    for (video, task) in &tasks {
+        let matchings: Vec<Matching<&PdfPage>> = task.process();
 
         let mut tx = db.begin_trans().await?;
         tx.update_video_matchings(&video.hash, matchings.iter())
             .await?;
         tx.commit().await?;
     }
+    base_reporter.finish();
 
-    let first = pdfs.iter().next();
-
-    if !opt.non_interactive {
+    if !opt.non_interactive && pdfs.len() == 1 {
+        let first = pdfs.iter().next();
         start_server(first.map(|h| h.hash.clone()))?;
     }
 
@@ -188,16 +212,69 @@ impl<'a> MatchableImage for &PdfPage<'a> {
     }
 }
 
-struct ConsoleProgressReporter {}
+struct ComposedProgressReporter {
+    progress: Arc<Mutex<Vec<(u64, u64)>>>,
+    inner: ProgressReporter,
+}
 
-impl ConsoleProgressReporter {
-    pub fn new() -> ConsoleProgressReporter {
-        ConsoleProgressReporter {}
+impl ComposedProgressReporter {
+    pub fn new(inner: ProgressReporter) -> Self {
+        ComposedProgressReporter {
+            progress: Arc::new(Mutex::new(Vec::new())),
+            inner,
+        }
     }
 }
 
-impl ProgressReporter for &ConsoleProgressReporter {
-    fn report(&self, progress: f32) {
-        println!("{}%", progress * 100.0);
+impl ComposedProgressReporter {
+    pub fn create_nested(&self) -> ProgressReporter {
+        let mut p = self.progress.lock().unwrap();
+        let idx = p.len();
+        p.push((0, 0));
+        let p = self.progress.clone();
+        let inner = self.inner.clone();
+
+        ProgressReporter::new(Arc::new(move |processed_count, total_count, msg| {
+            let mut p = p.lock().unwrap();
+            p[idx] = (processed_count, total_count);
+
+            let processed_count = p.iter().map(|v| v.0).sum();
+            let total_count = p.iter().map(|v| v.1).sum();
+            inner.report(processed_count, total_count, msg)
+        }))
+    }
+}
+
+struct IndicatifProgressReporter {
+    bar: ProgressBar,
+}
+
+impl Default for IndicatifProgressReporter {
+    fn default() -> Self {
+        let bar = ProgressBar::new(0);
+        bar.set_style(
+            ProgressStyle::default_bar()
+                .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}"),
+        );
+        Self { bar }
+    }
+}
+
+impl IndicatifProgressReporter {
+    pub fn get_reporter(&self) -> ProgressReporter {
+        let bar = self.bar.clone();
+        ProgressReporter::new(Arc::new(move |processed_count, total_count, text: &str| {
+            if bar.length() != total_count {
+                bar.set_length(total_count);
+            }
+            if bar.position() != processed_count {
+                bar.set_position(processed_count);
+            }
+            bar.set_message(text);
+        }))
+    }
+
+    pub fn finish(&self) {
+        self.bar.finish();
     }
 }

@@ -5,3 +5,4 @@ authors = ["Henning Dieterichs <henning.dieterichs@live.de>"]
 edition = "2018"
 
 [dependencies]
+tempdir = "0.3.7"

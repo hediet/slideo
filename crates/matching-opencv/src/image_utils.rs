@@ -19,7 +19,7 @@ pub fn to_small_image(mat: &Mat) -> Mat {
     scaled_mat
 }
 
-pub fn get_similarity(img1: &Mat, img2: &Mat) -> f32 {
+pub fn compute_similarity(img1: &Mat, img2: &Mat) -> f32 {
     let error_l2 = norm2(img1, img2, NORM_L2, &no_array().unwrap()).unwrap();
     let p = img1.rows() * img1.cols();
     let max_error = ((255.0 * 255.0 * 3.0) * (p as f32)).sqrt();
@@ -36,19 +36,13 @@ impl Transformation2D {
     }
 }
 
-pub struct EstimationResult {
+pub struct TransformationWithInliers {
     pub transformation: Transformation2D,
-    inliers: Vector<u8>,
-}
-
-impl EstimationResult {
-    pub fn inlier_flags(&self) -> Vec<bool> {
-        self.inliers.iter().map(|v| v == 1).collect()
-    }
+    pub inlier_flags: Vec<bool>,
 }
 
 impl Transformation2D {
-    pub fn estimate_affine<I>(points: I) -> EstimationResult
+    pub fn estimate_affine<I>(points: I) -> TransformationWithInliers
     where
         I: Iterator<Item = (Point2f, Point2f)>,
     {
@@ -59,9 +53,9 @@ impl Transformation2D {
             .unwrap();
         assert!(from.len() == inliers.len());
 
-        EstimationResult {
+        TransformationWithInliers {
             transformation: Transformation2D::new(mat),
-            inliers,
+            inlier_flags: inliers.iter().map(|v| v == 1).collect(),
         }
     }
 }
