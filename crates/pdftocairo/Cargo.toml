@@ -1,0 +1,9 @@
+[package]
+name = "pdftocairo"
+description = "Provides wraps the pdftocairo command and provides progress reporting. Requires poppler to be installed."
+version = "0.1.0"
+authors = ["Henning Dieterichs <henning.dieterichs@live.de>"]
+edition = "2018"
+
+[dev-dependencies]
+tempdir = "0.3"
