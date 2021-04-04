@@ -122,6 +122,8 @@ jobs:
                     cp "C:\tools\opencv\LICENSE_FFMPEG.txt" "$staging/"
                     cp "C:\tools\opencv\LICENSE.txt" "$staging/LICENSE_OPENCV.txt"
                     
+                    7z x ./dependencies/windows/poppler.7z -o$staging/poppler
+
                     7z a "$staging.zip" "$staging"
                     echo "ASSET=$staging.zip" >> $GITHUB_ENV
                   else

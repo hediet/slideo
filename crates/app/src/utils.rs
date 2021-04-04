@@ -31,12 +31,3 @@ pub fn hash_file(path: &Path) -> Result<String> {
     copy(&mut file, &mut sha256)?;
     Ok(format!("{:x}", sha256.finalize()))
 }
-
-/*
-pub fn fmt_duration(d: Duration) -> String {
-    let seconds = d.as_secs() % 60;
-    let minutes = (d.as_secs() / 60) % 60;
-    let hours = (d.as_secs() / 60) / 60;
-    return format!("{}:{}:{}", hours, minutes, seconds);
-}
-*/

@@ -90,7 +90,7 @@ fn index() -> web::HttpResponse {
     handle_embedded_file("index.html")
 }
 
-#[get("_:.*")]
+#[get("{_:.*}")]
 fn dist(path: web::Path<String>) -> web::HttpResponse {
     handle_embedded_file(&path.0)
 }

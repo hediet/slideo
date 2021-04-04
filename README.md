@@ -12,7 +12,11 @@ _This is tool is more a proof of concept rather than a polished product. Please 
 
 Go to the releases and download and extract the appropriate release.
 
-If you are not a windows user, please also install:
+### Windows Requirements
+
+-   [Microsoft Visual C++ Redistributable für Visual Studio 2019](https://visualstudio.microsoft.com/de/downloads/#microsoft-visual-c-redistributable-for-visual-studio-2019)
+
+### Linux, Mac Requirements
 
 -   OpenCV 4.5.1
 -   Poppler

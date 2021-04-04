@@ -24,7 +24,7 @@ use std::time::Duration;
 use std::{cell::RefCell, sync::Mutex};
 use std::{collections::HashMap, path::PathBuf};
 use thread_local::ThreadLocal;
-use video_capture::{FilterIter, VideoCaptureIter};
+use video_capture::{MarkSimilarIter, VideoCaptureIter};
 
 #[derive(Default)]
 pub struct OpenCVImageVideoMatcher {}
@@ -148,13 +148,15 @@ impl<I: MatchableImage + Send + Copy + Eq> VideoMatcherTask<I> for OpenCVVideoMa
     fn process(&self) -> Vec<Matching<I>> {
         let results = Arc::new(Mutex::new(Vec::<Matching<I>>::new()));
 
+        let mut frames_to_process = 0;
+
         rayon::scope_fifo(|s| {
             let interval = Duration::from_secs(5);
             let vid = VideoCaptureIter::open(&self.video_path, interval);
             let total_time = vid.total_time();
             let total_frames = vid.total_frames();
-            let frames_to_process = (total_time.as_secs_f64() / interval.as_secs_f64()) as u32;
-            let video_frames = FilterIter::new(vid);
+            frames_to_process = (total_time.as_secs_f64() / interval.as_secs_f64()) as u32;
+            let video_frames = MarkSimilarIter::new(vid);
 
             // Add a matching to indicate the last frame.
             let results = results.clone();
@@ -186,7 +188,6 @@ impl<I: MatchableImage + Send + Copy + Eq> VideoMatcherTask<I> for OpenCVVideoMa
                 }
 
                 let results = results.clone();
-                //let progress = progress.clone();
                 let report_progress = report_progress.clone();
                 s.spawn_fifo(move |_s| {
                     let matching = self.match_images_with_frame(frame, frame_time, frame_idx);
@@ -196,13 +197,13 @@ impl<I: MatchableImage + Send + Copy + Eq> VideoMatcherTask<I> for OpenCVVideoMa
                     report_progress();
                 });
             }
-
-            self.progress_reporter.report(
-                frames_to_process as u64,
-                frames_to_process as u64,
-                &format!("Finished!"),
-            );
         });
+
+        self.progress_reporter.report(
+            frames_to_process as u64,
+            frames_to_process as u64,
+            &format!("Finished!"),
+        );
 
         let mut mappings = results.lock().unwrap().clone();
         mappings.sort_by_key(|m| m.video_time);

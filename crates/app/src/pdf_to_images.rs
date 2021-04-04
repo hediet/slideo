@@ -6,7 +6,7 @@ use crate::{
 use anyhow::Result;
 use async_std::task::block_on;
 use lexical_sort::{natural_lexical_cmp, PathSort};
-use matching::ProgressReporter;
+use matching::{MatchableImage, ProgressReporter};
 use pdftocairo::pdf_info;
 use rand::Rng;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
@@ -22,6 +22,12 @@ pub struct PdfPage<'t> {
     pub pdf_hash: &'t str,
     pub image_path: PathBuf,
     pub page_idx: usize,
+}
+
+impl<'a> MatchableImage for &PdfPage<'a> {
+    fn get_path(&self) -> &Path {
+        &self.image_path
+    }
 }
 
 pub fn pdfs_to_images<'t>(

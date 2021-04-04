@@ -57,7 +57,7 @@ impl Iterator for VideoCaptureIter {
     }
 }
 
-pub struct FilterIter<I>
+pub struct MarkSimilarIter<I>
 where
     I: Iterator<Item = (Mat, Duration, usize)>,
 {
@@ -65,19 +65,19 @@ where
     last_frame: Option<Rc<Mat>>,
 }
 
-impl<I> FilterIter<I>
+impl<I> MarkSimilarIter<I>
 where
     I: Iterator<Item = (Mat, Duration, usize)>,
 {
     pub fn new(iter: I) -> Self {
-        return FilterIter {
+        return MarkSimilarIter {
             iter,
             last_frame: None,
         };
     }
 }
 
-impl<I> Iterator for FilterIter<I>
+impl<I> Iterator for MarkSimilarIter<I>
 where
     I: Iterator<Item = (Mat, Duration, usize)>,
 {
