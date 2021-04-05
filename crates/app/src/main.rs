@@ -41,56 +41,73 @@ struct Opt {
 async fn main() -> Result<()> {
     let opt: Opt = Opt::from_args();
 
+    let poppler = std::env::current_exe()?.parent().unwrap().join("poppler");
+    add_to_path(poppler)?;
+
     let db_pool = DbPool::connect().await?;
     let mut db = db_pool.db().await?;
 
     let (pdfs, videos) = process_files(&opt.files, &mut db).await?;
     let videos_to_process = get_videos_to_process(&videos, &pdfs, &opt, &mut db).await?;
 
-    let reporter = IndicatifProgressReporter::default();
-    let pages = pdfs_to_images(
-        &pdfs.iter().map(|p| p).collect(),
-        &db_pool,
-        reporter.get_reporter(),
-    )?;
-    reporter.finish();
+    if videos_to_process.len() > 0 {
+        let reporter = IndicatifProgressReporter::default();
+        let pages = pdfs_to_images(
+            &pdfs.iter().map(|p| p).collect(),
+            &db_pool,
+            reporter.get_reporter(),
+        )?;
+        reporter.finish();
 
-    let mut tx = db.begin_trans().await?;
-    for video in &videos_to_process {
-        tx.create_or_reset_video(&video.hash, pdfs.iter().map(|v| &v.hash as &str))
-            .await?;
-    }
-    tx.commit().await?;
-
-    let matcher = OpenCVImageVideoMatcher::default();
-    let video_matcher = matcher.create_video_matcher(pages.iter().collect());
-
-    let base_reporter = IndicatifProgressReporter::default();
-    let reporter = ComposedProgressReporter::new(base_reporter.get_reporter());
-    let tasks: Vec<_> = videos_to_process
-        .iter()
-        .map(|video| {
-            (
-                video,
-                video_matcher.match_images_with_video(&video.path, reporter.create_nested()),
-            )
-        })
-        .collect();
-
-    for (video, task) in tasks {
-        let matchings = task.process();
         let mut tx = db.begin_trans().await?;
-        tx.update_video_matchings(&video.hash, matchings.iter())
-            .await?;
+        for video in &videos_to_process {
+            tx.create_or_reset_video(&video.hash, pdfs.iter().map(|v| &v.hash as &str))
+                .await?;
+        }
         tx.commit().await?;
+
+        let matcher = OpenCVImageVideoMatcher::default();
+        let reporter = IndicatifProgressReporter::default();
+        let video_matcher =
+            matcher.create_video_matcher(pages.iter().collect(), reporter.get_reporter());
+        reporter.finish();
+
+        let base_reporter = IndicatifProgressReporter::default();
+        let reporter = ComposedProgressReporter::new(base_reporter.get_reporter());
+        let tasks: Vec<_> = videos_to_process
+            .iter()
+            .map(|video| {
+                (
+                    video,
+                    video_matcher.match_images_with_video(&video.path, reporter.create_nested()),
+                )
+            })
+            .collect();
+
+        for (video, task) in tasks {
+            let matchings = task.process();
+            let mut tx = db.begin_trans().await?;
+            tx.update_video_matchings(&video.hash, matchings.iter())
+                .await?;
+            tx.commit().await?;
+        }
+        base_reporter.finish();
     }
-    base_reporter.finish();
 
     if !opt.non_interactive && pdfs.len() == 1 {
         let first = pdfs.iter().next();
         start_server(first.map(|h| h.hash.clone()))?;
     }
 
+    Ok(())
+}
+
+pub fn add_to_path(path: PathBuf) -> Result<()> {
+    let path_val = std::env::var("PATH")?;
+    let mut paths: Vec<PathBuf> = std::env::split_paths(&path_val).collect();
+    paths.insert(0, path);
+    let new_path_val = std::env::join_paths(paths)?;
+    std::env::set_var("PATH", new_path_val);
     Ok(())
 }
 

@@ -18,11 +18,15 @@ use opencv::{
     imgproc::{cvt_color, warp_affine, COLOR_BGRA2BGR, WARP_INVERSE_MAP},
     prelude::*,
 };
-use std::path::Path;
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use std::sync::Arc;
 use std::time::Duration;
 use std::{cell::RefCell, sync::Mutex};
 use std::{collections::HashMap, path::PathBuf};
+use std::{
+    path::Path,
+    sync::atomic::{AtomicUsize, Ordering},
+};
 use thread_local::ThreadLocal;
 use video_capture::{MarkSimilarIter, VideoCaptureIter};
 
@@ -33,9 +37,25 @@ impl OpenCVImageVideoMatcher {
     fn create_video_matcher<'i, I: MatchableImage + Send + Sync + Copy + Eq + 'i>(
         &self,
         images: Vec<I>,
+        progress_reporter: ProgressReporter,
     ) -> OpenCVVideoMatcher<I> {
-        let processed_images: Vec<ProcessedImage<I>> =
-            images.into_iter().map(ProcessedImage::compute).collect();
+        let len = images.len() as u64;
+        progress_reporter.report(0, len, "Analyzing PDF pages...");
+        let processed_pages = AtomicUsize::new(0);
+        let processed_images: Vec<ProcessedImage<I>> = images
+            .into_par_iter()
+            .map(ProcessedImage::compute)
+            .map(|v| {
+                progress_reporter.report(
+                    (processed_pages.fetch_add(1, Ordering::Relaxed) + 1) as u64,
+                    len,
+                    "Analyzing PDF pages...",
+                );
+                v
+            })
+            .collect();
+
+        progress_reporter.report(len, len, "PDF page analysis successful.");
 
         OpenCVVideoMatcher {
             shared_flanns: Arc::new(ThreadLocal::new()),
@@ -48,8 +68,9 @@ impl<'i> ImageVideoMatcher<'i> for OpenCVImageVideoMatcher {
     fn create_video_matcher<I: MatchableImage + Send + Sync + Copy + Eq + 'i>(
         &self,
         images: Vec<I>,
+        progress_reporter: ProgressReporter,
     ) -> Box<dyn VideoMatcher<'i, I> + 'i> {
-        Box::new(self.create_video_matcher(images))
+        Box::new(self.create_video_matcher(images, progress_reporter))
     }
 }
 

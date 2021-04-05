@@ -9,6 +9,7 @@ pub trait ImageVideoMatcher<'i> {
     fn create_video_matcher<I: MatchableImage + Send + Sync + Copy + Eq + 'i>(
         &self,
         images: Vec<I>,
+        progress_reporter: ProgressReporter,
     ) -> Box<dyn VideoMatcher<'i, I> + 'i>;
 }
 

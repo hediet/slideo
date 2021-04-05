@@ -100,12 +100,9 @@ pub async fn start_server(pdf_hash: Option<String>) -> Result<()> {
     let db_pool = DbPool::connect().await?;
 
     if let Some(pdf_hash) = pdf_hash {
-        println!(
-            "View pdf on 'http://127.0.0.1:63944/?pdf-hash={}'.",
-            pdf_hash
-        );
+        println!("View pdf on http://localhost:63944/?pdf-hash={}", pdf_hash);
     } else {
-        println!("Server is running on 'http://127.0.0.1:63944'.");
+        println!("Server is running on 'http://localhost:63944'.");
     }
 
     HttpServer::new(move || {
@@ -119,7 +116,7 @@ pub async fn start_server(pdf_hash: Option<String>) -> Result<()> {
             .service(index)
             .service(dist)
     })
-    .bind("127.0.0.1:63944")?
+    .bind("localhost:63944")?
     .run()
     .await?;
 
