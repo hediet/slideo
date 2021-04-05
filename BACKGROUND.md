@@ -33,7 +33,7 @@ PDF pages are extracted into a temporary folder.
 -   OpenCV (with FFMPEG to decode videos)
 -   SQLite (with sqlx for checked SQL queries)
 -   actix-web to host the embedded viewer
--   TypeScript, Mobx, React, Video.js and Pdf.js for the viewer
+-   TypeScript, Mobx, React, Video.js and Pdf.js for the viewer ([I created my own library to bundle the pdfjs viewer](https://github.com/hediet/pdf.js-viewer))
 
 actix-web was the only web-framework I could find with direct support for video streaming/seeking of files with a custom url to file location resolver.
 
