@@ -21,6 +21,8 @@
 
 Do as much of this in parallel. Sadly, OpenCVs FLANN and ORB implementation are not thread-safe, so create and maintain one of them per thread.
 
+Thanks to [phiresky](https://github.com/phiresky) who helped me prototyping a [Python PoC](https://github.com/phiresky/match-slides-to-recording).
+
 ## Data Organization
 
 SQLite is used to keep track of the slide/frame mapping.
