@@ -86,6 +86,7 @@ pub struct Options<P> {
     /// One based
     pub last_page: Option<u32>,
     pub progress: Option<P>,
+    pub reuse_target_dir_content: bool,
 }
 
 impl<P> Options<P> {
@@ -130,6 +131,7 @@ impl<P> Default for Options<P> {
             last_page: None,
             pages: Pages::All,
             progress: None,
+            reuse_target_dir_content: false,
         }
     }
 }
@@ -143,42 +145,7 @@ pub fn pdftocairo<P: Fn(ProgressInfo)>(
         create_dir_all(target_dir)?;
     }
 
-    let has_items = target_dir.read_dir()?.next().is_some();
-    if has_items {
-        panic!("The given target directory must be empty!");
-    }
-
     let pdf_info = pdf_info(pdf)?;
-
-    let result = Arc::new(Mutex::<Option<()>>::new(None));
-
-    let pdf2 = pdf.to_owned();
-    let target_dir2 = target_dir.to_owned();
-    let result2 = result.clone();
-
-    let mut cmd = Command::new(&"pdftocairo");
-    cmd.arg(&pdf2);
-    cmd.arg(&target_dir2.join("p"));
-    cmd.args(&options.color.to_args());
-    cmd.args(&options.format.to_args());
-    cmd.args(&options.pages.to_args());
-    if let Some(f) = options.first_page {
-        cmd.args(vec!["-f", &f.to_string()]);
-    }
-    if let Some(l) = options.last_page {
-        cmd.args(vec!["-l", &l.to_string()]);
-    }
-
-    thread::spawn(move || {
-        let r = cmd
-            .status()
-            .expect(&format!("Cairo should extract pdf slides"));
-        if !r.success() {
-            // TODO
-        }
-        let mut m = result2.lock().unwrap();
-        *m = Some(());
-    });
 
     let page_count = options.exported_page_count(pdf_info.page_count());
 
@@ -199,10 +166,47 @@ pub fn pdftocairo<P: Fn(ProgressInfo)>(
         }
     };
 
-    while result.lock().unwrap().is_none() {
-        report_progress(target_dir.read_dir()?.count() as u32);
+    let has_items = target_dir.read_dir()?.next().is_some();
+    if has_items {
+        if !options.reuse_target_dir_content {
+            panic!("The given target directory must be empty!");
+        }
+    } else {
+        let result = Arc::new(Mutex::<Option<()>>::new(None));
 
-        thread::sleep(Duration::from_millis(500));
+        let pdf2 = pdf.to_owned();
+        let target_dir2 = target_dir.to_owned();
+        let result2 = result.clone();
+
+        let mut cmd = Command::new(&"pdftocairo");
+        cmd.arg(&pdf2);
+        cmd.arg(&target_dir2.join("p"));
+        cmd.args(&options.color.to_args());
+        cmd.args(&options.format.to_args());
+        cmd.args(&options.pages.to_args());
+        if let Some(f) = options.first_page {
+            cmd.args(vec!["-f", &f.to_string()]);
+        }
+        if let Some(l) = options.last_page {
+            cmd.args(vec!["-l", &l.to_string()]);
+        }
+
+        thread::spawn(move || {
+            let r = cmd
+                .status()
+                .expect(&format!("Cairo should extract pdf slides"));
+            if !r.success() {
+                // TODO
+            }
+            let mut m = result2.lock().unwrap();
+            *m = Some(());
+        });
+
+        while result.lock().unwrap().is_none() {
+            report_progress(target_dir.read_dir()?.count() as u32);
+
+            thread::sleep(Duration::from_millis(500));
+        }
     }
 
     report_progress(target_dir.read_dir()?.count() as u32);

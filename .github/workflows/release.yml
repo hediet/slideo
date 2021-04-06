@@ -101,7 +101,6 @@ jobs:
               if: steps.cache-webview.outputs.cache-hit != 'true'
               run: yarn build
               working-directory: webview
-
             - name: Build
               run: |
                   source ./ci/setup-env.sh

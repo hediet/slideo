@@ -5,7 +5,6 @@ use crate::{
 };
 use anyhow::Result;
 use async_std::task::block_on;
-use lexical_sort::{natural_lexical_cmp, PathSort};
 use matching::{MatchableImage, ProgressReporter};
 use pdftocairo::pdf_info;
 use rand::Rng;
@@ -123,33 +122,23 @@ fn pdf_to_images<'t>(
     }
     */
 
-    if !target_dir.exists() {
-        pdftocairo::pdftocairo(
-            pdf_path,
-            target_dir,
-            pdftocairo::Options {
-                progress: Some(|p: pdftocairo::ProgressInfo| {
-                    progress(p.processed_pages);
-                }),
-                ..pdftocairo::Options::default()
-            },
-        )?;
-    }
+    let pages = pdftocairo::pdftocairo(
+        pdf_path,
+        target_dir,
+        pdftocairo::Options {
+            progress: Some(|p: pdftocairo::ProgressInfo| {
+                progress(p.processed_pages);
+            }),
+            reuse_target_dir_content: true,
+            ..pdftocairo::Options::default()
+        },
+    )?;
 
-    let mut vec: Vec<PathBuf> = glob::glob(&target_dir.join(&"*.png").to_string_lossy())
-        .unwrap()
-        .map(|p| p.unwrap())
-        .collect();
-    vec.path_sort(natural_lexical_cmp);
-
-    progress(vec.len() as u32);
-
-    Ok(vec
+    Ok(pages
         .into_iter()
-        .enumerate()
-        .map(|(page_idx, image_path)| PdfPage {
-            page_idx,
-            image_path,
+        .map(|p| PdfPage {
+            page_idx: p.index as usize,
+            image_path: p.image_path,
             pdf_path,
             pdf_hash,
         })
