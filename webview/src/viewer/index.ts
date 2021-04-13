@@ -15,6 +15,7 @@ const { client } = Contract.registerServerToStream(
 			pdfMatchings = matchings;
 			loadViewer({
 				pdfUrl,
+				disableFileDrop: true,
 			});
 			return {};
 		},
@@ -53,7 +54,7 @@ PDFPageView.prototype.draw = function (...args) {
 		playButtons.style.margin = "10px";
 
 		playButtons.innerHTML = `
-    <div style="display: flex; align-content: center">
+    <div style="display: flex; align-content: center" ondragover="">
 		<div class="playButton" style="display: flex; align-items: center;">
 			<svg data-icon="play" width="22" height="22" viewBox="0 0 20 20"><desc>play</desc><path d="M16 10c0-.36-.2-.67-.49-.84l.01-.01-10-6-.01.01A.991.991 0 005 3c-.55 0-1 .45-1 1v12c0 .55.45 1 1 1 .19 0 .36-.07.51-.16l.01.01 10-6-.01-.01c.29-.17.49-.48.49-.84z" fill-rule="evenodd"></path></svg>
 			<div style="width: 2px"></div>

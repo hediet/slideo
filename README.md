@@ -56,7 +56,9 @@ slideo lecture1.pdf video1.mp4 --non-interactive && slideo lecture2.pdf video2.m
 slideo lecture1.pdf
 ```
 
-This will spawn a webserver on port 63944 and print an url that you can open in your favorite browser.
+This will spawn a webserver on port 63944 and print an url that you can open in your favorite browser to open the viewer.
+
+**You can drag&drop any processed PDF into the viewer!**
 
 ## TODO
 

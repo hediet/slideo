@@ -2,6 +2,7 @@ import { ConsoleRpcLogger, Contract, RpcStreamLogger } from "@hediet/json-rpc";
 import { connectToIFrame } from "@hediet/json-rpc-browser";
 import { autorun, observable } from "mobx";
 import { disposeOnUnmount } from "mobx-react";
+import { DragEventHandler } from "react";
 import React = require("react");
 import { Matching } from "../model";
 import { pdfViewerContract } from "../viewer/contract";
@@ -10,6 +11,8 @@ export class PdfViewer extends React.Component<{
 	pdfUrl: string;
 	playVideo: (offsetMs: number, videoHash: string) => void;
 	matchings: Matching[];
+	onDrop?: DragEventHandler<any>;
+	onDragOver?: DragEventHandler<any>;
 }> {
 	private iframe: HTMLIFrameElement | null = null;
 	@observable.ref
@@ -29,6 +32,17 @@ export class PdfViewer extends React.Component<{
 		if (!iframe) {
 			return;
 		}
+		iframe!.contentWindow!.addEventListener(
+			"drop",
+			this.props.onDrop!,
+			false
+		);
+
+		iframe!.contentWindow!.addEventListener(
+			"dragover",
+			this.props.onDragOver,
+			false
+		);
 
 		const { server } = Contract.getServerFromStream(
 			pdfViewerContract,

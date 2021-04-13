@@ -65,6 +65,12 @@ export class Model {
 
 		this.fetchMatchings().then((m) => (this.matchings = m));
 	}
+
+	public setPdfHash(hash: string) {
+		const u = new URL(window.location.href);
+		u.searchParams.set("pdf-hash", hash);
+		window.location.href = u.toString();
+	}
 }
 
 export interface Matching {

@@ -14,10 +14,10 @@
   resolved "https://registry.yarnpkg.com/@discoveryjs/json-ext/-/json-ext-0.5.2.tgz#8f03a22a04de437254e8ce8cc84ba39689288752"
   integrity sha512-HyYEUDeIj5rRQU2Hk5HTB2uHsbRQpF70nvMhVzi+VJR0X+xNEhjPui4/kBf3VeH/wqD28PT4sVOm8qqLjBrSZg==
 
-"@hediet/json-rpc-browser@0.3.0":
-  version "0.3.0"
-  resolved "https://registry.yarnpkg.com/@hediet/json-rpc-browser/-/json-rpc-browser-0.3.0.tgz#6f1203d2b8c759a5927e19c7c6d0c533120de106"
-  integrity sha512-flUrXiBzHLbfz55wcAAGCcM7pGoQDcVY9LvWEsvTR098Tg9cxS5dl9bf6rJVqrl6cS2OFUDUfTmjx0y0Qa7YuQ==
+"@hediet/json-rpc-browser@0.3.1":
+  version "0.3.1"
+  resolved "https://registry.yarnpkg.com/@hediet/json-rpc-browser/-/json-rpc-browser-0.3.1.tgz#8c15b54634036a92ba31c1b9404fc84acf753eb3"
+  integrity sha512-2NXQkIKOYBVRppr0af7HSxe0RgoBm0aHnkUY2A+QfxsZiBhaXsEFOW3itFpiamH7ShCR92Qohdn6hX7yK3t6hg==
   dependencies:
     "@hediet/json-rpc" "^0.3.0"
     "@hediet/std" "^0.6.0"
@@ -30,10 +30,10 @@
     "@hediet/semantic-json" "^0.4.1"
     "@hediet/std" "^0.6.0"
 
-"@hediet/pdfjs-viewer@^0.1.0":
-  version "0.1.0"
-  resolved "https://registry.yarnpkg.com/@hediet/pdfjs-viewer/-/pdfjs-viewer-0.1.0.tgz#1862f35e61ca666af047b4eea0cd14b9c5eb507b"
-  integrity sha512-yIvxadOqZ/6tQqJxKhHqH3/JcHGoAj2PUN6eKjXnYoKF73y98/52b6obnXuNzYZfX7IUkuL2DWwzmVV7279x9g==
+"@hediet/pdfjs-viewer@^0.1.1":
+  version "0.1.1"
+  resolved "https://registry.yarnpkg.com/@hediet/pdfjs-viewer/-/pdfjs-viewer-0.1.1.tgz#0f9daa8cc4e2651582766323365bcf98db71368d"
+  integrity sha512-fybuIH1Zh2jHQ68Drv4ypVkr3MjLASaqCqNnfD6N27ZtBi4HnbRSqfhEcyss5YKTSLIO7zTdw2hlIz2g5QnOQw==
   dependencies:
     pdfjs-dist "^2.6.347"
 
@@ -2435,6 +2435,11 @@ jest-worker@^26.6.2:
     "@types/node" "*"
     merge-stream "^2.0.0"
     supports-color "^7.0.0"
+
+js-sha256@^0.9.0:
+  version "0.9.0"
+  resolved "https://registry.yarnpkg.com/js-sha256/-/js-sha256-0.9.0.tgz#0b89ac166583e91ef9123644bd3c5334ce9d0966"
+  integrity sha512-sga3MHh9sgQN2+pJ9VYZ+1LPwXOxuBJBA5nrR5/ofPfuiJBE2hnjsaN8se8JznOmGLN2p49Pe5U/ttafcs/apA==
 
 "js-tokens@^3.0.0 || ^4.0.0":
   version "4.0.0"
