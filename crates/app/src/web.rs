@@ -102,12 +102,12 @@ pub async fn start_server(pdf_hash: Option<String>) -> Result<()> {
     if let Some(pdf_hash) = pdf_hash {
         println!("View pdf on http://localhost:63944/?pdf-hash={}", pdf_hash);
     } else {
-        println!("Server is running on 'http://localhost:63944'.");
+        println!("Server is running on http://localhost:63944");
     }
 
     HttpServer::new(move || {
         App::new()
-            .wrap(Cors::default().allowed_origin("http://localhost:8080"))
+            .wrap(Cors::default().allowed_origin("http://127.0.0.1:8080"))
             .data(AppState {
                 db_pool: db_pool.clone(),
             })
@@ -116,7 +116,7 @@ pub async fn start_server(pdf_hash: Option<String>) -> Result<()> {
             .service(index)
             .service(dist)
     })
-    .bind("localhost:63944")?
+    .bind("127.0.0.1:63944")?
     .run()
     .await?;
 
