@@ -36,7 +36,7 @@ jobs:
                     - stable
                 version:
                     - opencv: 4.5.1
-                      brew: "@4"
+                      brew: "https://github.com/Homebrew/homebrew-core/blob/9c03502bf100fa252640382e90bb4611cafe83d9/Formula/opencv.rb"
                       features: opencv-4
                 os:
                     - build: linux

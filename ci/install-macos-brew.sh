@@ -2,4 +2,4 @@
 
 set -vex
 
-brew install opencv"$BREW_OPENCV_VERSION"
+brew install $BREW_OPENCV_VERSION
