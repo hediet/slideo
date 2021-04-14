@@ -40,7 +40,7 @@ impl Iterator for VideoCaptureIter {
     type Item = (Mat, Duration, usize);
 
     fn next(&mut self) -> Option<(Mat, Duration, /* frame */ usize)> {
-        let mut frame = Mat::default().unwrap();
+        let mut frame = Mat::default();
         loop {
             let frame_idx = self.video.get(CAP_PROP_POS_FRAMES).unwrap();
             let time_passed = Duration::from_secs_f64(frame_idx / self.fps);

@@ -29,7 +29,7 @@ An installer is not yet provided. Feel free to contribute!
 
 (untested)
 
--   OpenCV 4.5.1
+-   OpenCV 4.5.2
 -   Poppler
 
 ## Usage

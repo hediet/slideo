@@ -6,7 +6,7 @@ use opencv::{
 };
 
 pub fn to_small_image(mat: &Mat) -> Mat {
-    let mut scaled_mat = Mat::default().unwrap();
+    let mut scaled_mat = Mat::default();
     let size = mat.size().unwrap();
     let max_area = 300 * 400;
     let factor = ((max_area as f32) / (size.area() as f32)).sqrt();

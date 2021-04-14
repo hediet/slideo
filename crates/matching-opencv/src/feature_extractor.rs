@@ -27,7 +27,7 @@ impl FeatureExtractor {
     }
 
     pub fn find_keypoints_and_descriptors(&mut self, src: &Mat) -> KeypointsWithDescriptors {
-        let mut descriptors = Mat::default().unwrap();
+        let mut descriptors = Mat::default();
         let mut keypoints = Vector::new();
         self.ptr
             .detect_and_compute(

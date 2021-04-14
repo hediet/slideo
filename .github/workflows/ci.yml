@@ -15,7 +15,7 @@ jobs:
                 rust:
                     - stable
                 version:
-                    - opencv: 4.5.1
+                    - opencv: 4.5.2
                       brew: "@4"
                       features: opencv-4
                 os:

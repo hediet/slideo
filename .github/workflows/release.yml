@@ -35,7 +35,7 @@ jobs:
                 rust:
                     - stable
                 version:
-                    - opencv: 4.5.1
+                    - opencv: 4.5.2
                       brew: "@4"
                       features: opencv-4
                 os:
@@ -116,8 +116,8 @@ jobs:
                   if [ "${{ matrix.os.family }}" = "windows" ]; then
 
                     cp "target/release/slideo.exe" "$staging/"
-                    cp "C:\tools\opencv\build\x64\vc15\bin\opencv_world451.dll" "$staging/"
-                    cp "C:\tools\opencv\build\x64\vc15\bin\opencv_videoio_ffmpeg451_64.dll" "$staging/"
+                    cp "C:\tools\opencv\build\x64\vc15\bin\opencv_world452.dll" "$staging/"
+                    cp "C:\tools\opencv\build\x64\vc15\bin\opencv_videoio_ffmpeg452_64.dll" "$staging/"
                     cp "C:\tools\opencv\LICENSE_FFMPEG.txt" "$staging/"
                     cp "C:\tools\opencv\LICENSE.txt" "$staging/LICENSE_OPENCV.txt"
                     

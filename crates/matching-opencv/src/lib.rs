@@ -100,7 +100,7 @@ impl<I: MatchableImage> ProcessedImage<I> {
             panic!("Could not read file '{:?}'", path);
         }
 
-        let mut normalized_img_mat = Mat::default().unwrap();
+        let mut normalized_img_mat = Mat::default();
         cvt_color(&img_mat, &mut normalized_img_mat, COLOR_BGRA2BGR, 0).unwrap();
 
         let result = FEATURE_EXTRACTOR.with(|e| {
@@ -335,7 +335,7 @@ impl<I: MatchableImage + Send + Copy + Eq> OpenCVVideoMatcherTask<I> {
         let mut rated_best_matches = rated_best_matches
             .into_iter()
             .map(|(slide_info, matches, _rating, transformation)| {
-                let mut frame_proj = Mat::default().unwrap();
+                let mut frame_proj = Mat::default();
                 warp_affine(
                     &frame,
                     &mut frame_proj,
