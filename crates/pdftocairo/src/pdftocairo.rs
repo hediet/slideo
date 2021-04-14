@@ -12,7 +12,8 @@ use crate::pdf_info;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Page {
-    pub index: u32,
+    /// Starts with 1.
+    pub page_nr: u32,
     pub image_path: PathBuf,
 }
 
@@ -219,15 +220,15 @@ pub fn pdftocairo<P: Fn(ProgressInfo)>(
         let file_name = file_name.to_string_lossy();
 
         let name_without_ext = file_name.split('.').next().unwrap();
-        let page_idx_str = &name_without_ext[2..];
-        let page_idx: u32 = page_idx_str.parse().unwrap();
+        let page_nr_str = &name_without_ext[2..];
+        let page_nr: u32 = page_nr_str.parse().unwrap();
         result.push(Page {
             image_path: item.path(),
-            index: page_idx,
+            page_nr,
         });
     }
 
-    result.sort_by_key(|r| r.index);
+    result.sort_by_key(|r| r.page_nr);
 
     Ok(result)
 }

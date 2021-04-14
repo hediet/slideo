@@ -20,7 +20,8 @@ pub struct PdfPage<'t> {
     pub pdf_path: &'t Path,
     pub pdf_hash: &'t str,
     pub image_path: PathBuf,
-    pub page_idx: usize,
+    /// 1-based.
+    pub page_nr: usize,
 }
 
 impl<'a> MatchableImage for &PdfPage<'a> {
@@ -137,7 +138,7 @@ fn pdf_to_images<'t>(
     Ok(pages
         .into_iter()
         .map(|p| PdfPage {
-            page_idx: p.index as usize,
+            page_nr: p.page_nr as usize,
             image_path: p.image_path,
             pdf_path,
             pdf_hash,

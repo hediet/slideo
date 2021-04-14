@@ -176,13 +176,14 @@ impl<'a> Db<'a, TransactionMarker> {
         for matching in matchings {
             let pdf_hash = matching.image.map(|p| p.pdf_hash);
             let video_ms = matching.video_time.as_millis() as u32;
-            let page_idx = matching.image.map(|p| p.page_idx as u32).unwrap_or(0);
+            let page_nr = matching.image.map(|p| p.page_nr as u32).unwrap_or(0);
+            let page_offset = page_nr - 1;
             sqlx::query!(
                 "INSERT INTO videos_mapping(video_id, video_ms, pdf_hash, page) VALUES (?, ?, ?, ?)",
                 video_id,
                 video_ms,
                 pdf_hash,
-                page_idx,
+                page_offset,
             )
             .execute(self.get_conn_mut())
             .await?;
