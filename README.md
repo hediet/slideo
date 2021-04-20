@@ -10,7 +10,7 @@ Its primary use-case is to quickly play a recorded lecture from a given slide.
 
 Works best if the PDF page in the video is captured through screen recording and video is 1080p, but it might work in other scenarios too (rotation, shifting, scaling, obstruction and additional on-screen content is supported).
 
-**See [Background](./BACKGROUND.md) for how the matching algorithm works.**
+**See [Background](./BACKGROUND.md) for building instructions and how the matching algorithm works.**
 
 _This is tool is more a proof of concept rather than a polished product. Please reach out if you want to make a nice open source product out of it._
 

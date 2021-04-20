@@ -46,3 +46,13 @@ However, it is horrible to use from rust.
 [rust-cv](https://github.com/rust-cv) seems to be a better fit for rust, however,
 many features are still missing (such as the ORB feature extractor) and it does not seem to be production ready yet.
 I'm open to migrate to rust-cv though and think it has a lot more potential than OpenCV.
+
+## Building Instructions
+
+See [`ci.yml`](./.github/workflows/ci.yml) for how the CI builds the project:
+
+-   Install OpenCV
+-   Install Rust, NodeJS and yarn
+-   Run `yarn install` in the [webview](./webview) directory.
+-   Run `yarn build` in the [webview](./webview) directory.
+-   Run `cargo run` in the root directory.
